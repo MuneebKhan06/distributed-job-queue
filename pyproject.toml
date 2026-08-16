@@ -1,0 +1,12 @@
+[tool.ruff]
+line-length = 100
+# The supported floor, not the version this is developed on. CI runs 3.10 as
+# well as 3.11, so ruff has to assume the older one or it will suggest idioms
+# that fail the 3.10 job.
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = [
+    "B008",  # FastAPI's Depends() in argument defaults is the intended idiom
+]
