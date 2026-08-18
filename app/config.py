@@ -6,7 +6,7 @@ runs without a .env file. Anything you do put in .env wins.
 
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     # API
     app_name: str = "distributed-job-queue"
     api_host: str = "0.0.0.0"
-    api_port: int = 8000
+    api_port: int = Field(default=8000, ge=1, le=65535)
     log_level: str = "INFO"
 
     # PostgreSQL
@@ -39,18 +39,29 @@ class Settings(BaseSettings):
     redis_db: int = 0
     redis_url_override: str | None = Field(default=None, validation_alias="REDIS_URL")
 
-    # Worker
-    worker_batch_size: int = 10
-    worker_block_ms: int = 5000
-    high_priority_weight: int = 3
+    # Worker. Bounded here rather than trusted, because these are read once at
+    # startup and then used in the hot loop: a zero batch size or a zero weight
+    # only shows up as a worker that silently does nothing.
+    worker_batch_size: int = Field(default=10, ge=1, le=1000)
+    worker_block_ms: int = Field(default=5000, ge=100)
+    high_priority_weight: int = Field(default=3, ge=1, le=100)
 
     # Retries
-    retry_base_delay_seconds: float = 1.0
-    retry_max_delay_seconds: float = 60.0
-    max_attempts: int = 5
+    retry_base_delay_seconds: float = Field(default=1.0, gt=0)
+    retry_max_delay_seconds: float = Field(default=60.0, gt=0)
+    max_attempts: int = Field(default=5, ge=1, le=20)
 
     # Metrics
-    worker_metrics_port: int = 9100
+    worker_metrics_port: int = Field(default=9100, ge=1, le=65535)
+
+    @model_validator(mode="after")
+    def check_retry_window(self) -> "Settings":
+        if self.retry_max_delay_seconds < self.retry_base_delay_seconds:
+            raise ValueError(
+                "retry_max_delay_seconds must be at least retry_base_delay_seconds, "
+                f"got max={self.retry_max_delay_seconds} base={self.retry_base_delay_seconds}"
+            )
+        return self
 
     @property
     def database_url(self) -> str:
