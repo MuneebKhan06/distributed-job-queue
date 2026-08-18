@@ -5,7 +5,6 @@ statements rather than each growing their own slightly different version of
 "mark this job finished".
 """
 
-from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
@@ -15,9 +14,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import DLQJob, Job
 
-
-def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+# Timestamps come from func.now(), the database clock, not from the process
+# writing the row. Workers run on separate hosts with independently drifting
+# clocks, so a started_at from one machine and a completed_at from another can
+# produce a negative execution time. One clock for every row removes that whole
+# class of nonsense from the duration maths.
 
 
 class JobRepository:
@@ -90,7 +91,7 @@ class JobRepository:
                 status="running",
                 worker_id=worker_id,
                 attempt=attempt,
-                started_at=_utcnow(),
+                started_at=func.now(),
             )
         )
 
@@ -102,7 +103,7 @@ class JobRepository:
                 status="completed",
                 result=result,
                 error_message=None,
-                completed_at=_utcnow(),
+                completed_at=func.now(),
             )
         )
 
@@ -126,7 +127,7 @@ class JobRepository:
             .values(
                 status="dead",
                 error_message=error_message,
-                completed_at=_utcnow(),
+                completed_at=func.now(),
             )
         )
 
