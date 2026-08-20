@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from app.api.routes import health, jobs
+from app.api.routes import dlq, health, jobs
 from app.config import get_settings
 from app.db.connection import dispose_engine
 from app.redis.client import close_redis, ensure_consumer_groups
@@ -46,3 +46,4 @@ app = FastAPI(
 
 app.include_router(health.router)
 app.include_router(jobs.router)
+app.include_router(dlq.router)
