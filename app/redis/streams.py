@@ -18,6 +18,10 @@ STREAM_NORMAL = "jobs.normal"
 STREAM_LOW = "jobs.low"
 STREAM_DLQ = "jobs.dlq"
 
+# Retries wait here until they come due. A sorted set rather than a stream,
+# because a stream cannot express "readable at time T".
+RETRY_ZSET = "jobs.retry"
+
 CONSUMER_GROUP = "job-workers"
 
 STREAM_BY_PRIORITY: dict[JobPriority, str] = {

@@ -8,14 +8,17 @@ in the group, so no coordination between workers is needed or wanted.
 import asyncio
 import logging
 import signal
+from uuid import UUID
 
 from app.config import get_settings
 from app.db.connection import dispose_engine
 from app.redis.client import close_redis, ensure_consumer_groups
 from app.redis.consumer import JobMessage, acknowledge, claim_stale, read_batch
+from app.redis.delayed import pop_due_retries, schedule_retry
 from app.redis.producer import enqueue_job
 from app.redis.streams import WORK_STREAMS, build_worker_name, poll_order
 from worker.executor import JobOutcome, execute
+from worker.retry import compute_delay
 
 settings = get_settings()
 
@@ -50,16 +53,24 @@ async def _handle(message: JobMessage, worker_name: str) -> None:
         return
 
     if result.outcome == JobOutcome.RETRY:
-        # Redis Streams has no delayed delivery, so a retry is a new message
-        # carrying an incremented attempt count. The original is acknowledged
-        # so it does not also sit in the PEL waiting to be reclaimed.
-        await enqueue_job(
+        # Parked in the delay queue rather than put straight back on the
+        # stream. Scheduling happens before the ACK, so a crash in between
+        # leaves the original in the PEL to be reclaimed instead of dropping
+        # the retry on the floor.
+        attempt = message.attempt + 1
+        delay = compute_delay(
+            attempt=attempt,
+            base_delay=settings.retry_base_delay_seconds,
+            max_delay=settings.retry_max_delay_seconds,
+        )
+        await schedule_retry(
             job_id=message.job_id,
             job_type=message.job_type,
             priority=message.priority,
             payload=message.payload,
+            attempt=attempt,
             max_attempts=message.max_attempts,
-            attempt=message.attempt + 1,
+            delay_seconds=delay,
         )
         await acknowledge(message.stream, message.message_id)
         return
@@ -67,6 +78,28 @@ async def _handle(message: JobMessage, worker_name: str) -> None:
     # Dead. The job is marked in PostgreSQL and the message is acknowledged so
     # it stops being redelivered.
     await acknowledge(message.stream, message.message_id)
+
+
+async def _release_due_retries() -> int:
+    """Move retries that have come due back onto their priority stream.
+
+    Every worker sweeps, and ZPOPMIN guarantees each entry goes to exactly one
+    of them, so this needs no separate scheduler process to run correctly.
+    """
+    released = 0
+    for entry in await pop_due_retries(limit=settings.worker_batch_size):
+        await enqueue_job(
+            job_id=UUID(entry["job_id"]),
+            job_type=entry["job_type"],
+            priority=entry["priority"],
+            payload=entry["payload"],
+            max_attempts=entry["max_attempts"],
+            attempt=entry["attempt"],
+        )
+        released += 1
+    if released:
+        logger.info("Released %d due retries back onto the queue", released)
+    return released
 
 
 async def _sweep_stale(worker_name: str) -> list[JobMessage]:
@@ -86,6 +119,8 @@ async def run() -> None:
 
     try:
         while not _shutdown.is_set():
+            await _release_due_retries()
+
             for message in await _sweep_stale(worker_name):
                 await _handle(message, worker_name)
 

@@ -109,6 +109,7 @@ distributed-job-queue/
 |   |   |-- client.py               # Redis connection pool
 |   |   |-- producer.py             # XADD to jobs.queue stream
 |   |   |-- consumer.py             # XREADGROUP consumer loop
+|   |   |-- delayed.py              # Sorted set delay queue for retries
 |   |   |-- streams.py              # Stream and group names as constants
 |   |
 |   |-- db/
@@ -331,11 +332,33 @@ Full jitter (0 to max) versus equal jitter (half max to max): equal jitter is
 chosen here because zero delay on the first retry would make the jitter range
 indistinguishable from no-delay for the first attempt.
 
+**Where the delay actually happens:**
+
+Redis Streams have no delayed delivery. Anything appended with XADD is readable
+by the next XREADGROUP, so the backoff formula needs somewhere to hold a job
+until it comes due. Three options, and only one of them survives a crash:
+
+- Sleep in the worker before re-enqueueing. Blocks that worker for the whole
+  delay, and a crash during the sleep loses the job, because the original
+  message has already been acknowledged.
+- Re-enqueue immediately with a "not before" field and let workers skip jobs
+  that are not due. Every worker then spins re-reading the same messages.
+- A sorted set (`jobs.retry`) scored by due timestamp. The entry lives in
+  Redis, so a worker crash costs nothing, and finding what is due is a range
+  query rather than a scan.
+
+The sorted set is what this project uses. Each worker pops due entries with
+ZPOPMIN before polling the streams, which is atomic, so no separate scheduler
+process is needed and two workers sweeping at once cannot release the same
+retry twice.
+
 **Tradeoffs accepted:**
 
 - Longer total time to exhaust retries vs immediate retry
 - Non-deterministic retry timing (harder to test without mocking random)
 - max_attempts is configurable but not per-job-type in this version
+- A retry lives in the sorted set rather than the stream, so queue depth is two
+  numbers (XLEN plus ZCARD) instead of one
 
 ---
 
