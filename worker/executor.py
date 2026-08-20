@@ -10,6 +10,7 @@ import logging
 from enum import Enum
 from typing import Any
 
+from app.core.dlq import send_to_dlq
 from app.db.connection import session_scope
 from app.db.repository import JobRepository
 from app.redis.consumer import JobMessage
@@ -87,6 +88,18 @@ async def execute(message: JobMessage, worker_id: str) -> ExecutionResult:
 
 async def _record_dead(message: JobMessage, error: str, permanent: bool) -> ExecutionResult:
     reason = "permanent failure" if permanent else "retries exhausted"
+    detail = f"{reason}: {error}"
+
     async with session_scope() as session:
-        await JobRepository(session).mark_dead(message.job_id, f"{reason}: {error}")
-    return ExecutionResult(JobOutcome.DEAD, error=f"{reason}: {error}")
+        await JobRepository(session).mark_dead(message.job_id, detail)
+
+    # Routed to the DLQ after the job row is marked, so a dead job is never
+    # visible in the DLQ while the jobs table still claims it is running.
+    await send_to_dlq(
+        job_id=message.job_id,
+        job_type=message.job_type,
+        payload=message.payload,
+        error_reason=detail,
+        attempt_count=message.attempt + 1,
+    )
+    return ExecutionResult(JobOutcome.DEAD, error=detail)

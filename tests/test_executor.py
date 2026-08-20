@@ -15,15 +15,22 @@ def repository():
     return AsyncMock()
 
 
+@pytest.fixture
+def dlq():
+    """Routing to the DLQ is exercised in test_dlq.py. Here it is stubbed so the
+    executor tests stay free of Redis and PostgreSQL."""
+    return AsyncMock()
+
+
 @pytest.fixture(autouse=True)
-def fake_database(repository):
+def fake_database(repository, dlq):
     @asynccontextmanager
     async def scope():
         yield MagicMock()
 
     with patch("worker.executor.session_scope", scope), patch(
         "worker.executor.JobRepository", return_value=repository
-    ):
+    ), patch("worker.executor.send_to_dlq", dlq):
         repository.is_completed.return_value = False
         yield
 
