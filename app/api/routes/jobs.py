@@ -28,11 +28,17 @@ async def submit_job(
 ) -> JobAccepted:
     """Persist the job, then put it on the stream.
 
-    The order matters. Writing to Redis first would let a worker pick up a job
-    whose row does not exist yet, and the worker's first action is to update
-    that row. The reverse failure, a row that never reaches the stream, leaves
-    the job visibly stuck in 'queued' rather than causing a confusing crash in
-    a worker, and it is recoverable by resubmitting the same job_id.
+    The order matters. A worker that picks up a message whose row is not
+    committed yet finds nothing to mark running, executes against a job it
+    cannot see, and its completion write updates zero rows. The reverse
+    failure, a committed row that never reaches the stream, leaves the job
+    visibly stuck in 'queued' and is recoverable by resubmitting the same
+    job_id.
+
+    Getting that order right takes an explicit commit. The session dependency
+    commits on teardown, which FastAPI runs after the handler returns, so
+    without this the enqueue would happen first and the ordering above would be
+    exactly backwards.
     """
     created = await repository.create_job(
         job_id=submission.job_id,
@@ -46,6 +52,8 @@ async def submit_job(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Job {submission.job_id} has already been submitted",
         )
+
+    await repository.session.commit()
 
     message_id = await enqueue_job(
         job_id=submission.job_id,
