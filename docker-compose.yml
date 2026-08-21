@@ -1,0 +1,94 @@
+name: distributed-job-queue
+
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    # Appendonly, because the queue lives here. A restart that loses the last
+    # few seconds of writes loses submitted jobs that the API already accepted.
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: jobqueue
+      POSTGRES_PASSWORD: jobqueue
+      POSTGRES_DB: jobqueue
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      # The user is named explicitly: pg_isready defaults to the OS user, which
+      # is postgres, not jobqueue, and reports healthy against the wrong role.
+      test: ["CMD-SHELL", "pg_isready -U jobqueue -d jobqueue"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    environment:
+      POSTGRES_HOST: postgres
+      REDIS_HOST: redis
+      LOG_LEVEL: INFO
+    ports:
+      - "8000:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.worker
+    environment:
+      POSTGRES_HOST: postgres
+      REDIS_HOST: redis
+      LOG_LEVEL: INFO
+    # Two by default. Scale with: docker compose up -d --scale worker=8
+    deploy:
+      replicas: 2
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      # Waits for migrations, which run in the API's start command. A worker
+      # that starts first would query tables that do not exist yet.
+      api:
+        condition: service_healthy
+    # No published port: several replicas cannot share one host port. Prometheus
+    # reaches them on the compose network instead.
+    expose:
+      - "9100"
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./docker/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on:
+      - api
+
+volumes:
+  redis_data:
+  postgres_data:

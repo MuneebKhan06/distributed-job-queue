@@ -1,0 +1,30 @@
+name: distributed-job-queue-test
+
+# Infrastructure only. The integration tests run on the host against these, so
+# a failing test can be re-run without rebuilding an image.
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: jobqueue
+      POSTGRES_PASSWORD: jobqueue
+      POSTGRES_DB: jobqueue_test
+    # Non-default ports, so running the tests cannot touch a development stack
+    # that happens to be up on 5432 and 6379.
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jobqueue -d jobqueue_test"]
+      interval: 3s
+      timeout: 3s
+      retries: 10

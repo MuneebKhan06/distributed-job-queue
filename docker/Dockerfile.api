@@ -1,0 +1,28 @@
+FROM python:3.11-slim
+
+# Bytecode files and stdout buffering both hurt in a container: the first is
+# wasted layer size, the second means logs vanish when the container is killed.
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+# Requirements first, as their own layer. Copying the source before installing
+# would rebuild the whole dependency layer on every code change.
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY alembic.ini ./
+COPY alembic ./alembic
+COPY app ./app
+
+# Not root. A container that only serves HTTP has no reason to be able to write
+# to its own installed packages.
+RUN useradd --create-home --uid 1000 appuser && chown -R appuser:appuser /app
+USER appuser
+
+EXPOSE 8000
+
+# Migrations run here rather than in a separate init container, because the API
+# is the only service that must not start against an unmigrated database.
+CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
