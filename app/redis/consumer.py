@@ -42,6 +42,33 @@ class MalformedMessage(Exception):
     """
 
 
+@dataclass(frozen=True)
+class PoisonMessage:
+    """A message that could not be decoded, carried out for disposal.
+
+    Dropping one silently is worse than it sounds. It is never acknowledged, so
+    it stays in the pending list, the stale sweep reclaims it, it fails to
+    decode again, and the cycle repeats for the life of the system. Returning
+    it lets the caller acknowledge it and record it, which ends the loop.
+    """
+
+    stream: str
+    message_id: str
+    fields: dict[str, str]
+    error: str
+
+
+@dataclass(frozen=True)
+class Batch:
+    """What one read returned: what can be executed, and what cannot."""
+
+    messages: list[JobMessage]
+    poison: list[PoisonMessage]
+
+    def __len__(self) -> int:
+        return len(self.messages)
+
+
 def decode_message(stream: str, message_id: str, fields: dict[str, str]) -> JobMessage:
     try:
         return JobMessage(
@@ -64,7 +91,7 @@ async def read_batch(
     count: int = 10,
     block_ms: int = 5000,
     client: Redis | None = None,
-) -> list[JobMessage]:
+) -> Batch:
     """Read the next batch, honouring the weighted priority order.
 
     Each stream is tried without blocking, in the order given, so a high
@@ -83,9 +110,9 @@ async def read_batch(
             count=count,
             block=None,
         )
-        messages = _flatten(response)
-        if messages:
-            return messages
+        batch = _flatten(response)
+        if batch.messages or batch.poison:
+            return batch
 
     response = await client.xreadgroup(
         groupname=CONSUMER_GROUP,
@@ -97,21 +124,24 @@ async def read_batch(
     return _flatten(response)
 
 
-def _flatten(response: Any) -> list[JobMessage]:
-    """Turn redis-py's [(stream, [(id, fields), ...]), ...] into JobMessages.
+def _flatten(response: Any) -> Batch:
+    """Turn redis-py's [(stream, [(id, fields), ...]), ...] into a Batch.
 
-    A message that will not decode is dropped here with a log rather than
-    raising, so one bad message cannot stall the whole batch. It stays in the
-    PEL and is picked up by the stale message sweep, which routes it to the DLQ.
+    A message that will not decode is separated out rather than raising, so one
+    bad message cannot stall the rest of the batch, and is returned rather than
+    dropped, so the caller can acknowledge it instead of leaving it to be
+    reclaimed and re-failed forever.
     """
     messages: list[JobMessage] = []
+    poison: list[PoisonMessage] = []
     for stream, entries in response or []:
         for message_id, fields in entries:
             try:
                 messages.append(decode_message(stream, message_id, fields))
             except MalformedMessage as exc:
-                logger.error("Skipping undecodable message: %s", exc)
-    return messages
+                logger.error("Undecodable message: %s", exc)
+                poison.append(PoisonMessage(stream, message_id, fields, str(exc)))
+    return Batch(messages=messages, poison=poison)
 
 
 async def acknowledge(stream: str, message_id: str, client: Redis | None = None) -> None:
@@ -130,7 +160,7 @@ async def claim_stale(
     min_idle_ms: int = 60_000,
     count: int = 10,
     client: Redis | None = None,
-) -> list[JobMessage]:
+) -> Batch:
     """Take over messages a dead worker left pending.
 
     When a worker crashes mid-job its messages stay in the PEL forever, since
@@ -146,12 +176,7 @@ async def claim_stale(
         min_idle_time=min_idle_ms,
         count=count,
     )
-    claimed: list[JobMessage] = []
-    for message_id, fields in entries:
-        try:
-            claimed.append(decode_message(stream, message_id, fields))
-        except MalformedMessage as exc:
-            logger.error("Claimed a message that will not decode: %s", exc)
-    if claimed:
-        logger.info("Reclaimed %d stale messages from %s", len(claimed), stream)
-    return claimed
+    batch = _flatten([(stream, entries)])
+    if batch.messages:
+        logger.info("Reclaimed %d stale messages from %s", len(batch.messages), stream)
+    return batch

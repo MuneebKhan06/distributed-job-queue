@@ -8,12 +8,20 @@ in the group, so no coordination between workers is needed or wanted.
 import asyncio
 import logging
 import signal
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from app.config import get_settings
+from app.core.dlq import send_to_dlq
 from app.db.connection import dispose_engine
 from app.redis.client import close_redis, ensure_consumer_groups
-from app.redis.consumer import JobMessage, acknowledge, claim_stale, read_batch
+from app.redis.consumer import (
+    Batch,
+    JobMessage,
+    PoisonMessage,
+    acknowledge,
+    claim_stale,
+    read_batch,
+)
 from app.redis.delayed import pop_due_retries, schedule_retry
 from app.redis.producer import enqueue_job
 from app.redis.streams import WORK_STREAMS, WeightedStreamCycle, build_worker_name
@@ -109,12 +117,47 @@ async def _release_due_retries() -> int:
     return released
 
 
-async def _sweep_stale(worker_name: str) -> list[JobMessage]:
+async def _discard(poison: PoisonMessage) -> None:
+    """Record an undecodable message and take it off the stream.
+
+    Without the acknowledgement this message is immortal: it never leaves the
+    pending list, the stale sweep reclaims it, it fails to decode again, and
+    the worker spends part of every cycle re-failing the same message. The DLQ
+    row is what makes the discard auditable rather than silent.
+    """
+    logger.error("Discarding undecodable message %s: %s", poison.message_id, poison.error)
+    await send_to_dlq(
+        job_id=_poison_job_id(poison),
+        job_type=poison.fields.get("job_type", "unknown"),
+        payload={"raw_fields": poison.fields},
+        error_reason=f"undecodable message: {poison.error}",
+        attempt_count=0,
+    )
+    await acknowledge(poison.stream, poison.message_id)
+
+
+def _poison_job_id(poison: PoisonMessage) -> UUID:
+    """The job's own ID if it survived, otherwise a generated one.
+
+    The DLQ row needs a UUID, and the reason a message is undecodable is often
+    that this very field is malformed. A generated ID keeps the failure
+    recorded instead of discarding the evidence for want of a key.
+    """
+    try:
+        return UUID(poison.fields["job_id"])
+    except (KeyError, ValueError):
+        return uuid4()
+
+
+async def _sweep_stale(worker_name: str) -> Batch:
     """Reclaim messages left pending by a worker that died mid-job."""
-    reclaimed: list[JobMessage] = []
+    messages: list[JobMessage] = []
+    poison: list[PoisonMessage] = []
     for stream in WORK_STREAMS:
-        reclaimed.extend(await claim_stale(worker_name, stream, min_idle_ms=STALE_AFTER_MS))
-    return reclaimed
+        batch = await claim_stale(worker_name, stream, min_idle_ms=STALE_AFTER_MS)
+        messages.extend(batch.messages)
+        poison.extend(batch.poison)
+    return Batch(messages=messages, poison=poison)
 
 
 async def run() -> None:
@@ -129,16 +172,21 @@ async def run() -> None:
         while not _shutdown.is_set():
             await _release_due_retries()
 
-            for message in await _sweep_stale(worker_name):
+            reclaimed = await _sweep_stale(worker_name)
+            for poison in reclaimed.poison:
+                await _discard(poison)
+            for message in reclaimed.messages:
                 await _handle(message, worker_name)
 
-            messages = await read_batch(
+            batch = await read_batch(
                 worker_name=worker_name,
                 poll_streams=cycle.next_order(),
                 count=settings.worker_batch_size,
                 block_ms=settings.worker_block_ms,
             )
-            for message in messages:
+            for poison in batch.poison:
+                await _discard(poison)
+            for message in batch.messages:
                 # Checked per message, not just per batch: a batch of ten slow
                 # jobs should not delay shutdown by ten job durations.
                 if _shutdown.is_set():

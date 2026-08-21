@@ -61,9 +61,9 @@ def test_missing_field_raises_malformed():
 async def test_higher_priority_stream_is_drained_first():
     client = AsyncMock()
     client.xreadgroup.return_value = [(STREAM_HIGH, [("1-0", fields())])]
-    messages = await read_batch("worker-1", (STREAM_HIGH, STREAM_NORMAL, STREAM_LOW),
-                                client=client)
-    assert len(messages) == 1
+    batch = await read_batch("worker-1", (STREAM_HIGH, STREAM_NORMAL, STREAM_LOW),
+                             client=client)
+    assert len(batch.messages) == 1
     assert client.xreadgroup.await_args.kwargs["streams"] == {STREAM_HIGH: ">"}
 
 
@@ -84,9 +84,35 @@ async def test_one_bad_message_does_not_discard_the_batch():
     client.xreadgroup.return_value = [
         (STREAM_NORMAL, [("1-0", {"job_id": "broken"}), ("2-0", fields())])
     ]
-    messages = await read_batch("worker-1", (STREAM_NORMAL,), client=client)
-    assert len(messages) == 1
-    assert messages[0].message_id == "2-0"
+    batch = await read_batch("worker-1", (STREAM_NORMAL,), client=client)
+    assert len(batch.messages) == 1
+    assert batch.messages[0].message_id == "2-0"
+
+
+async def test_an_undecodable_message_is_returned_rather_than_dropped():
+    """Dropping it means it is never acknowledged, so it stays pending, gets
+    reclaimed by the stale sweep, fails to decode again, and repeats forever."""
+    client = AsyncMock()
+    client.xreadgroup.return_value = [(STREAM_NORMAL, [("1-0", {"job_id": "broken"})])]
+
+    batch = await read_batch("worker-1", (STREAM_NORMAL,), client=client)
+
+    assert batch.messages == []
+    assert len(batch.poison) == 1
+    assert batch.poison[0].message_id == "1-0"
+    assert batch.poison[0].fields == {"job_id": "broken"}
+
+
+async def test_a_batch_of_only_poison_is_still_returned_immediately():
+    """Returning nothing would fall through to the blocking read and leave the
+    bad message sitting pending for another whole cycle."""
+    client = AsyncMock()
+    client.xreadgroup.return_value = [(STREAM_HIGH, [("1-0", {})])]
+
+    batch = await read_batch("worker-1", (STREAM_HIGH, STREAM_NORMAL), client=client)
+
+    assert len(batch.poison) == 1
+    assert client.xreadgroup.await_count == 1
 
 
 async def test_acknowledge_targets_the_group():
@@ -101,6 +127,6 @@ async def test_claim_stale_reassigns_pending_messages():
     client = AsyncMock()
     client.xautoclaim.return_value = ("0-0", [("1-0", fields())], [])
     claimed = await claim_stale("worker-2", STREAM_NORMAL, min_idle_ms=30_000, client=client)
-    assert len(claimed) == 1
+    assert len(claimed.messages) == 1
     assert client.xautoclaim.await_args.kwargs["consumername"] == "worker-2"
     assert client.xautoclaim.await_args.kwargs["min_idle_time"] == 30_000
