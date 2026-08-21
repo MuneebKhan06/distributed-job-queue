@@ -7,10 +7,12 @@ execution path.
 """
 
 import logging
+import time
 from enum import Enum
 from typing import Any
 
 from app.core.dlq import send_to_dlq
+from app.core.metrics import JOB_DURATION, JOBS_COMPLETED, JOBS_DEAD, JOBS_FAILED
 from app.db.connection import session_scope
 from app.db.repository import JobRepository
 from app.redis.consumer import JobMessage
@@ -61,6 +63,7 @@ async def execute(message: JobMessage, worker_id: str) -> ExecutionResult:
             return ExecutionResult(JobOutcome.SKIPPED)
         await repository.mark_running(message.job_id, worker_id, attempt)
 
+    started = time.perf_counter()
     try:
         handler = get_handler(message.job_type)
         result = await handler.run(message.job_type, message.payload)
@@ -76,12 +79,19 @@ async def execute(message: JobMessage, worker_id: str) -> ExecutionResult:
             logger.error("Job %s exhausted %d attempts: %s", message.job_id, attempt, error)
             return await _record_dead(message, error, permanent=False)
         logger.warning("Job %s attempt %d failed: %s", message.job_id, attempt, error)
+        JOBS_FAILED.labels(job_type=message.job_type).inc()
         async with session_scope() as session:
             await JobRepository(session).mark_failed(message.job_id, error)
         return ExecutionResult(JobOutcome.RETRY, error=error)
 
+    # Measured around the handler only. Including the database writes would
+    # blur "this job type is slow" into "PostgreSQL is slow", which are two
+    # different problems with two different fixes.
+    JOB_DURATION.labels(job_type=message.job_type).observe(time.perf_counter() - started)
+
     async with session_scope() as session:
         await JobRepository(session).mark_completed(message.job_id, result)
+    JOBS_COMPLETED.labels(job_type=message.job_type).inc()
     logger.info("Job %s completed on attempt %d", message.job_id, attempt)
     return ExecutionResult(JobOutcome.COMPLETED, result=result)
 
@@ -89,6 +99,11 @@ async def execute(message: JobMessage, worker_id: str) -> ExecutionResult:
 async def _record_dead(message: JobMessage, error: str, permanent: bool) -> ExecutionResult:
     reason = "permanent failure" if permanent else "retries exhausted"
     detail = f"{reason}: {error}"
+
+    JOBS_DEAD.labels(
+        job_type=message.job_type,
+        reason="permanent" if permanent else "exhausted",
+    ).inc()
 
     async with session_scope() as session:
         await JobRepository(session).mark_dead(message.job_id, detail)

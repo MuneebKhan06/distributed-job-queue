@@ -18,6 +18,7 @@ from app.redis.delayed import pop_due_retries, schedule_retry
 from app.redis.producer import enqueue_job
 from app.redis.streams import WORK_STREAMS, build_worker_name, poll_order
 from worker.executor import JobOutcome, execute
+from worker.metrics import JOBS_IN_FLIGHT, mark_stopped, start_metrics_server
 from worker.retry import compute_delay
 
 settings = get_settings()
@@ -43,7 +44,13 @@ def _request_shutdown(signum: int, _frame: object = None) -> None:
 
 async def _handle(message: JobMessage, worker_name: str) -> None:
     """Execute one message and decide what happens to it on the stream."""
-    result = await execute(message, worker_name)
+    JOBS_IN_FLIGHT.labels(worker_id=worker_name).inc()
+    try:
+        result = await execute(message, worker_name)
+    finally:
+        # In a finally, so a raised exception cannot leave the gauge stuck
+        # above zero for the life of the process.
+        JOBS_IN_FLIGHT.labels(worker_id=worker_name).dec()
 
     if result.outcome in (JobOutcome.COMPLETED, JobOutcome.SKIPPED):
         # ACK only after PostgreSQL has confirmed the job is finished. This
@@ -115,6 +122,7 @@ async def run() -> None:
     streams = poll_order(settings.high_priority_weight)
 
     await ensure_consumer_groups()
+    start_metrics_server(settings.worker_metrics_port, worker_name)
     logger.info("Worker %s started, polling %s", worker_name, streams)
 
     try:
@@ -140,6 +148,7 @@ async def run() -> None:
     finally:
         # Unacknowledged messages stay in the PEL and are reclaimed by another
         # worker, so stopping here loses nothing.
+        mark_stopped(worker_name)
         await close_redis()
         await dispose_engine()
         logger.info("Worker %s stopped cleanly", worker_name)
