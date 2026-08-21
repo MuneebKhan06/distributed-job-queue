@@ -6,6 +6,7 @@ from app.redis.streams import (
     STREAM_HIGH,
     STREAM_LOW,
     STREAM_NORMAL,
+    WeightedStreamCycle,
     build_worker_name,
     poll_order,
     stream_for,
@@ -58,3 +59,48 @@ def test_worker_names_are_unique_per_process():
     name = build_worker_name()
     assert name.startswith("worker-")
     assert name.split("-")[-1].isdigit()
+
+
+def test_cycle_starts_at_high_in_proportion_to_the_weight():
+    cycle = WeightedStreamCycle(3)
+
+    starts = [cycle.next_order()[0] for _ in range(5)]
+
+    assert starts.count(STREAM_HIGH) == 3
+    assert starts.count(STREAM_NORMAL) == 1
+    assert starts.count(STREAM_LOW) == 1
+
+
+def test_every_stream_is_reached_within_one_cycle():
+    """The regression this guards: reading in fixed priority order and stopping
+    at the first stream with work means normal and low are never reached while
+    high has anything on it, which is the starvation the weighting exists to
+    prevent."""
+    cycle = WeightedStreamCycle(3)
+
+    starts = {cycle.next_order()[0] for _ in range(5)}
+
+    assert starts == {STREAM_HIGH, STREAM_NORMAL, STREAM_LOW}
+
+
+def test_a_pass_never_probes_the_same_stream_twice():
+    """Repeats within one pass cost a round trip to be told what the previous
+    probe already said."""
+    cycle = WeightedStreamCycle(5)
+
+    for _ in range(12):
+        order = cycle.next_order()
+        assert len(order) == len(set(order)) == 3
+
+
+def test_a_weight_of_one_is_plain_round_robin():
+    cycle = WeightedStreamCycle(1)
+
+    starts = [cycle.next_order()[0] for _ in range(6)]
+
+    assert starts == [STREAM_HIGH, STREAM_NORMAL, STREAM_LOW] * 2
+
+
+def test_cycle_rejects_a_weight_below_one():
+    with pytest.raises(ValueError):
+        WeightedStreamCycle(0)

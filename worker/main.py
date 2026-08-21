@@ -16,7 +16,7 @@ from app.redis.client import close_redis, ensure_consumer_groups
 from app.redis.consumer import JobMessage, acknowledge, claim_stale, read_batch
 from app.redis.delayed import pop_due_retries, schedule_retry
 from app.redis.producer import enqueue_job
-from app.redis.streams import WORK_STREAMS, build_worker_name, poll_order
+from app.redis.streams import WORK_STREAMS, WeightedStreamCycle, build_worker_name
 from worker.executor import JobOutcome, execute
 from worker.metrics import JOBS_IN_FLIGHT, mark_stopped, start_metrics_server
 from worker.retry import compute_delay
@@ -119,11 +119,11 @@ async def _sweep_stale(worker_name: str) -> list[JobMessage]:
 
 async def run() -> None:
     worker_name = build_worker_name()
-    streams = poll_order(settings.high_priority_weight)
+    cycle = WeightedStreamCycle(settings.high_priority_weight)
 
     await ensure_consumer_groups()
     start_metrics_server(settings.worker_metrics_port, worker_name)
-    logger.info("Worker %s started, polling %s", worker_name, streams)
+    logger.info("Worker %s started, weight %d", worker_name, settings.high_priority_weight)
 
     try:
         while not _shutdown.is_set():
@@ -134,7 +134,7 @@ async def run() -> None:
 
             messages = await read_batch(
                 worker_name=worker_name,
-                poll_streams=streams,
+                poll_streams=cycle.next_order(),
                 count=settings.worker_batch_size,
                 block_ms=settings.worker_block_ms,
             )
