@@ -6,6 +6,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.metrics import JOBS_SUBMITTED
 from app.db.connection import get_session
 from app.db.repository import JobRepository
 from app.redis.producer import enqueue_job
@@ -53,6 +54,9 @@ async def submit_job(
         payload=submission.payload,
         max_attempts=submission.max_attempts,
     )
+    JOBS_SUBMITTED.labels(
+        job_type=submission.job_type, priority=submission.priority.value
+    ).inc()
     return JobAccepted(job_id=submission.job_id, stream_message_id=message_id)
 
 
