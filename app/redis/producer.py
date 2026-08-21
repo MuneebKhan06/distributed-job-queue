@@ -13,6 +13,7 @@ from uuid import UUID
 
 from redis.asyncio import Redis
 
+from app.config import get_settings
 from app.redis.client import get_redis
 from app.redis.streams import STREAM_DLQ, stream_for
 from app.schemas.jobs import JobPriority
@@ -56,6 +57,8 @@ async def enqueue_job(
     message_id = await client.xadd(
         stream,
         _encode(job_id, job_type, str(priority), payload, attempt, max_attempts),
+        maxlen=get_settings().stream_max_length,
+        approximate=True,
     )
     logger.info("Enqueued job %s on %s as %s", job_id, stream, message_id)
     return message_id
@@ -85,6 +88,8 @@ async def enqueue_dlq(
             "error_reason": error_reason,
             "attempt_count": str(attempt_count),
         },
+        maxlen=get_settings().dlq_max_length,
+        approximate=True,
     )
     logger.warning("Job %s sent to DLQ after %d attempts: %s", job_id, attempt_count, error_reason)
     return message_id

@@ -51,6 +51,15 @@ class Settings(BaseSettings):
     retry_max_delay_seconds: float = Field(default=60.0, gt=0)
     max_attempts: int = Field(default=5, ge=1, le=20)
 
+    # Stream retention. XACK removes a message from the pending list, not from
+    # the stream, so without trimming every job ever submitted stays in Redis
+    # memory forever. Approximate trimming lets Redis drop whole nodes instead
+    # of walking to an exact length, which is why it is close to free.
+    stream_max_length: int = Field(default=100_000, ge=1_000)
+    # The DLQ is kept longer: it is read by humans after the fact, and its
+    # volume is a small fraction of the main streams in any healthy system.
+    dlq_max_length: int = Field(default=50_000, ge=1_000)
+
     # Metrics
     worker_metrics_port: int = Field(default=9100, ge=1, le=65535)
 

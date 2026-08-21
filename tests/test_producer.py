@@ -8,6 +8,7 @@ import pytest
 
 from app.redis.producer import enqueue_dlq, enqueue_job, queue_depth
 from app.redis.streams import STREAM_DLQ, STREAM_HIGH, STREAM_LOW, STREAM_NORMAL
+from app.schemas.jobs import JobPriority
 
 
 @pytest.fixture
@@ -67,3 +68,27 @@ async def test_queue_depth_reads_xlen(client):
     client.xlen.return_value = 42
     assert await queue_depth(STREAM_HIGH, client=client) == 42
     client.xlen.assert_awaited_once_with(STREAM_HIGH)
+
+
+async def test_job_streams_are_trimmed_so_they_do_not_grow_forever():
+    """XACK takes a message out of the pending list, not out of the stream, so
+    without a maxlen every job ever submitted stays in Redis memory."""
+    client = AsyncMock()
+    client.xadd.return_value = "1-0"
+
+    await enqueue_job(uuid4(), "transform.csv", JobPriority.NORMAL, {}, client=client)
+
+    kwargs = client.xadd.await_args.kwargs
+    assert kwargs["maxlen"] > 0
+    # Approximate, so Redis drops whole nodes rather than walking to an exact
+    # length on every single append.
+    assert kwargs["approximate"] is True
+
+
+async def test_the_dlq_stream_is_trimmed_too():
+    client = AsyncMock()
+    client.xadd.return_value = "1-0"
+
+    await enqueue_dlq(uuid4(), "compute.sum", {}, "boom", 5, client=client)
+
+    assert client.xadd.await_args.kwargs["approximate"] is True
