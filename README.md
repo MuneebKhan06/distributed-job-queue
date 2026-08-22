@@ -83,7 +83,7 @@ distributed-job-queue/
 |
 |-- .github/
 |   |-- workflows/
-|       |-- ci.yml                   # Lint + tests on Python 3.10 and 3.11
+|       |-- ci.yml                   # Lint, unit tests on 3.10 and 3.11, integration job
 |
 |-- app/
 |   |-- __init__.py
@@ -110,7 +110,7 @@ distributed-job-queue/
 |   |   |-- producer.py             # XADD to jobs.queue stream
 |   |   |-- consumer.py             # XREADGROUP consumer loop
 |   |   |-- delayed.py              # Sorted set delay queue for retries
-|   |   |-- streams.py              # Stream and group names as constants
+|   |   |-- streams.py              # Stream names, and the weighted poll cycle
 |   |
 |   |-- db/
 |   |   |-- __init__.py
@@ -120,8 +120,7 @@ distributed-job-queue/
 |   |
 |   |-- core/
 |       |-- __init__.py
-|       |-- priorities.py           # Priority queue logic
-|       |-- dlq.py                  # DLQ handler
+|       |-- dlq.py                  # DLQ routing and replay
 |       |-- metrics.py              # Prometheus counters and gauges
 |
 |-- worker/
