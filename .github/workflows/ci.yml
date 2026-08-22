@@ -1,0 +1,101 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  test:
+    name: Lint and unit tests
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.11 is what the Docker images run. 3.10 is here because the code
+        # deliberately stays compatible with it, which is also what ruff's
+        # target-version claims. Without a 3.10 job that claim would drift
+        # untested until someone tried to run it.
+        python-version: ["3.10", "3.11"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Lint
+        run: ruff check app/ worker/ tests/ load_tests/ scripts/ alembic/
+
+      - name: Unit tests
+        # Integration tests are excluded here and run in their own job, which
+        # has the services they need. Left in, they would fail on a missing
+        # Redis rather than on anything about the code.
+        run: pytest tests/ -m "not integration"
+
+  integration:
+    name: Integration tests
+    runs-on: ubuntu-latest
+
+    # Real Redis and PostgreSQL, because the whole value of these tests is
+    # catching the wiring that mocks agree to no matter what it says.
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: jobqueue
+          POSTGRES_PASSWORD: jobqueue
+          POSTGRES_DB: jobqueue_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U jobqueue -d jobqueue_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Run migrations
+        env:
+          POSTGRES_HOST: localhost
+          POSTGRES_DB: jobqueue_test
+        run: alembic upgrade head
+
+      - name: Integration tests
+        env:
+          POSTGRES_HOST: localhost
+          POSTGRES_DB: jobqueue_test
+          REDIS_HOST: localhost
+        run: pytest tests/ -m integration -v
