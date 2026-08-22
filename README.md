@@ -160,6 +160,7 @@ distributed-job-queue/
 |   |-- locustfile.py               # Jobs/sec benchmark at 1, 4, 8 workers
 |
 |-- scripts/
+|   |-- ingest_weather.py          # Feed the queue from a live public weather API
 |   |-- submit_jobs.py              # CLI to submit test jobs in bulk
 |   |-- replay_dlq.py               # CLI to replay failed jobs from DLQ
 |
@@ -633,10 +634,18 @@ ruff check app/ worker/ tests/
 
 ### Integration tests
 
+The test stack binds non-default ports (6380 and 5433) so running the tests
+cannot touch a development stack that happens to be up on the usual ones. That
+is also why the connection settings have to be passed in.
+
 ```bash
-docker-compose -f docker-compose.test.yml up -d
+docker compose -f docker-compose.test.yml up -d
+
+REDIS_HOST=localhost REDIS_PORT=6380 \
+POSTGRES_HOST=localhost POSTGRES_PORT=5433 POSTGRES_DB=jobqueue_test \
 pytest tests/ -m integration
-docker-compose -f docker-compose.test.yml down -v
+
+docker compose -f docker-compose.test.yml down -v
 ```
 
 ---
