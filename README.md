@@ -652,25 +652,79 @@ docker compose -f docker-compose.test.yml down -v
 
 ## Load Test Results
 
-> Measured on: TBD (filled in once the load tests are run)
-> Docker Compose single-node, Locust on same machine.
+> Measured on: 8 core x86_64, 31 GB RAM, Linux 6.8, Docker 24.0.9.
+> Single node Docker Compose, Locust on the same machine.
+> 50 concurrent users, 0.1 to 0.5s think time, 45 second runs.
+> Reproduce with `load_tests/locustfile.py` and the commands in Development.
 
-### Jobs/sec by worker count
+### Submission throughput
 
-| Workers | Jobs/sec | Avg Latency | P95 Latency | Error Rate |
-|---|---|---|---|---|
-| 1 | TBD | TBD | TBD | TBD |
-| 4 | TBD | TBD | TBD | TBD |
-| 8 | TBD | TBD | TBD | TBD |
+| Workers | Requests | Req/sec | Avg latency | P50 | P95 | Errors |
+|---|---|---|---|---|---|---|
+| 1 | 2,814 | 62.9 | 454 ms | 460 ms | 820 ms | 0 |
+| 4 | 2,875 | 64.4 | 439 ms | 420 ms | 750 ms | 0 |
+| 8 | 3,393 | 75.8 | 332 ms | 300 ms | 640 ms | 0 |
+
+**Submission throughput barely moves with worker count, and it should not.**
+Workers do not serve HTTP. A submission is validated, written to PostgreSQL,
+and appended to a stream, all by the API process, so adding workers cannot make
+that path faster. Publishing a table where this number scales with workers
+would mean the benchmark was measuring something other than what it claims.
+
+The modest gain at 8 workers is not the workers either. These runs share one
+machine with Redis, PostgreSQL, the API, and Locust itself, so the numbers move
+with whatever else the box is doing. Treating a 20 percent difference here as a
+real effect would be reading noise as signal.
+
+The honest limit in these runs is the load generator, not the server. With 50
+users, a 0.3s average think time, and a 450ms average response, arithmetic caps
+the offered load near 66 requests a second, which is roughly what was measured.
+Finding the API's actual ceiling needs more users than one Locust process on a
+contended machine can usefully drive.
+
+### Drain rate
+
+This is the number worker count actually changes: the backlog left when the
+submission run stops, and how long the workers take to clear it.
+
+| Workers | Backlog at end of run | Drain time | Effective jobs/sec |
+|---|---|---|---|
+| 1 | ~2,800 | 14.9 s | ~190 |
+| 4 | ~2,900 | 0.7 s | ~4,100 |
+| 8 | ~3,400 | 0.6 s | ~5,600 |
+
+Going from 1 to 4 workers cuts drain time by about 20x, which is more than the
+4x the worker count would suggest. The single worker is not merely doing a
+quarter of the work: it spends the whole submission run falling behind, so it
+finishes with a full backlog, while four workers keep pace during the run and
+have almost nothing left at the end.
+
+From 4 to 8 there is nothing left to win. The backlog is already near zero when
+the run ends, so drain time measures the polling interval rather than
+throughput. **Past the point where workers keep up with submissions, adding more
+does nothing**, which is the real lesson: the queue was never the bottleneck at
+this scale, and the way to find out is to measure the backlog rather than the
+request rate.
+
+These handlers are deliberately cheap, tens of milliseconds of in-memory work
+on 20 records. Real jobs that call a database or an external API would shift the
+balance entirely, and the drain numbers here should be read as a measure of the
+queue machinery, not of any particular workload.
 
 ### Queue depth under sustained load
 
-| Submission Rate | Workers | Queue Depth (steady state) | Drain Time |
+| Submission rate | Workers | Depth at steady state | Drain time |
 |---|---|---|---|
-| 100 jobs/sec | 4 | TBD | TBD |
-| 100 jobs/sec | 8 | TBD | TBD |
+| ~63 jobs/sec | 1 | grows without bound | 14.9 s after stop |
+| ~64 jobs/sec | 4 | ~0 | 0.7 s after stop |
+| ~76 jobs/sec | 8 | ~0 | 0.6 s after stop |
 
-*Results updated after Week 2 load testing.*
+Depth here is the consumer group's lag, not `XLEN`. Acknowledging a message
+leaves it in the stream, so stream length counts every job ever submitted and
+says nothing about backlog. That distinction cost an afternoon: the first
+version of this table could not be produced because the gauge being watched
+never fell, and the fix is why `queue_depth`, `queue_pending`, and
+`stream_length` are now three separate metrics.
 
 ---
 
