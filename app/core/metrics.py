@@ -11,7 +11,7 @@ import logging
 from prometheus_client import Counter, Gauge, Histogram
 
 from app.redis.client import get_redis
-from app.redis.streams import RETRY_ZSET, STREAM_DLQ, WORK_STREAMS
+from app.redis.streams import CONSUMER_GROUP, RETRY_ZSET, STREAM_DLQ, WORK_STREAMS
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +53,19 @@ JOB_DURATION = Histogram(
 
 QUEUE_DEPTH = Gauge(
     "queue_depth",
-    "Messages waiting on each stream",
+    "Messages not yet delivered to any worker",
+    ["stream"],
+)
+
+QUEUE_PENDING = Gauge(
+    "queue_pending",
+    "Messages delivered to a worker but not yet acknowledged",
+    ["stream"],
+)
+
+STREAM_LENGTH = Gauge(
+    "stream_length",
+    "Entries retained in each stream, delivered or not",
     ["stream"],
 )
 
@@ -66,17 +78,51 @@ RETRY_QUEUE_DEPTH = Gauge(
 async def refresh_queue_depths() -> None:
     """Read the current depths into the gauges.
 
-    Called at scrape time rather than tracked incrementally. A counter that the
-    API increments and workers decrement drifts the moment either restarts,
-    whereas XLEN is the truth and costs one round trip.
+    Backlog is the consumer group's lag, not XLEN. Acknowledging a message
+    removes it from the pending list but leaves it in the stream, so XLEN counts
+    every job ever submitted until trimming drops it. Reporting that as depth
+    means a queue that is completely caught up still shows thousands waiting,
+    which is worse than having no gauge at all: it is a number that looks right
+    and is not.
+
+    Three numbers, because they answer different questions. Lag is work nobody
+    has started. Pending is work in flight, and a pending count that does not
+    move is a stuck or dead worker. Length is retention, which is what says
+    whether trimming is keeping up.
+
+    Read at scrape time rather than tracked incrementally: a counter the API
+    increments and workers decrement drifts the moment either restarts.
     """
     client = get_redis()
     try:
         for stream in (*WORK_STREAMS, STREAM_DLQ):
-            QUEUE_DEPTH.labels(stream=stream).set(await client.xlen(stream))
+            STREAM_LENGTH.labels(stream=stream).set(await client.xlen(stream))
+            lag, pending = await _group_backlog(client, stream)
+            QUEUE_DEPTH.labels(stream=stream).set(lag)
+            QUEUE_PENDING.labels(stream=stream).set(pending)
         RETRY_QUEUE_DEPTH.set(await client.zcard(RETRY_ZSET))
     except Exception:
         # A scrape must not fail because Redis blinked. The gauges keep their
         # previous values, and the Redis exporter is what reports Redis itself
         # being down.
         logger.warning("Could not refresh queue depth gauges", exc_info=True)
+
+
+async def _group_backlog(client, stream: str) -> tuple[int, int]:
+    """(undelivered, in flight) for our consumer group on one stream.
+
+    Returns zeros when the group is not there yet, which is the normal state
+    between a stream being created and the first worker starting, rather than
+    an error worth failing a scrape over.
+    """
+    try:
+        groups = await client.xinfo_groups(stream)
+    except Exception:
+        return 0, 0
+
+    for group in groups:
+        if group.get("name") == CONSUMER_GROUP:
+            # lag is None on a stream whose entries were trimmed out from under
+            # the group, because Redis can no longer count what it lost.
+            return int(group.get("lag") or 0), int(group.get("pending") or 0)
+    return 0, 0
