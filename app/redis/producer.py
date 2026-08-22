@@ -13,6 +13,7 @@ from uuid import UUID
 
 from redis.asyncio import Redis
 
+from app.api.middleware import current_request_id
 from app.config import get_settings
 from app.redis.client import get_redis
 from app.redis.streams import STREAM_DLQ, stream_for
@@ -22,11 +23,11 @@ logger = logging.getLogger(__name__)
 
 
 def _encode(job_id: UUID, job_type: str, priority: str, payload: dict[str, Any],
-            attempt: int, max_attempts: int) -> dict[str, str]:
+            attempt: int, max_attempts: int, request_id: str) -> dict[str, str]:
     """Redis stream fields are flat strings, so the payload is JSON encoded.
 
     Everything else is stringified rather than left to redis-py, to keep the
-    wire format explicit: the consumer parses exactly these six fields.
+    wire format explicit: the consumer parses exactly these seven fields.
     """
     return {
         "job_id": str(job_id),
@@ -35,6 +36,10 @@ def _encode(job_id: UUID, job_type: str, priority: str, payload: dict[str, Any],
         "payload": json.dumps(payload),
         "attempt": str(attempt),
         "max_attempts": str(max_attempts),
+        # The submitting request's ID, so a worker log line can be traced back
+        # to the caller. "-" when there was no request, which is the case for a
+        # retry released from the delay queue or a replay from the CLI.
+        "request_id": request_id,
     }
 
 
@@ -46,6 +51,7 @@ async def enqueue_job(
     max_attempts: int = 5,
     attempt: int = 0,
     client: Redis | None = None,
+    request_id: str | None = None,
 ) -> str:
     """Append a job to the stream for its priority, returning the message ID.
 
@@ -56,7 +62,15 @@ async def enqueue_job(
     stream = stream_for(priority)
     message_id = await client.xadd(
         stream,
-        _encode(job_id, job_type, str(priority), payload, attempt, max_attempts),
+        _encode(
+            job_id,
+            job_type,
+            str(priority),
+            payload,
+            attempt,
+            max_attempts,
+            request_id if request_id is not None else current_request_id(),
+        ),
         maxlen=get_settings().stream_max_length,
         approximate=True,
     )

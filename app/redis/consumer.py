@@ -32,6 +32,10 @@ class JobMessage:
     payload: dict[str, Any]
     attempt: int
     max_attempts: int
+    #: Correlation ID of the submitting request, or "-" if there was none.
+    #: Defaulted rather than required, so a message written before this field
+    #: existed still decodes instead of becoming poison on upgrade.
+    request_id: str = "-"
 
 
 class MalformedMessage(Exception):
@@ -80,6 +84,7 @@ def decode_message(stream: str, message_id: str, fields: dict[str, str]) -> JobM
             payload=json.loads(fields["payload"]),
             attempt=int(fields["attempt"]),
             max_attempts=int(fields["max_attempts"]),
+            request_id=fields.get("request_id", "-"),
         )
     except (KeyError, ValueError, json.JSONDecodeError) as exc:
         raise MalformedMessage(f"{message_id} on {stream}: {exc}") from exc

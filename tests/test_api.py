@@ -114,3 +114,55 @@ def test_listing_passes_filters_through(client, repository):
         "limit": 10,
         "offset": 5,
     }
+
+
+def test_a_generated_correlation_id_is_returned(client, enqueue):
+    response = client.post("/jobs", json=body())
+
+    assert len(response.headers["X-Request-ID"]) == 36
+
+
+def test_a_supplied_correlation_id_is_echoed_back(client, enqueue):
+    response = client.post("/jobs", json=body(), headers={"X-Request-ID": "trace-abc-123"})
+
+    assert response.headers["X-Request-ID"] == "trace-abc-123"
+
+
+def test_a_dangerous_correlation_id_is_replaced_not_sanitised(client, enqueue):
+    """A newline in a header would let a caller forge log lines. Replacing it
+    with a generated ID is safer than editing it into something the caller
+    never sent and would not recognise."""
+    forged = "abc\nERROR  fake log line"
+
+    response = client.post("/jobs", json=body(), headers={"X-Request-ID": forged})
+
+    assert response.headers["X-Request-ID"] != forged
+    assert "\n" not in response.headers["X-Request-ID"]
+
+
+def test_an_overlong_correlation_id_is_replaced(client, enqueue):
+    response = client.post("/jobs", json=body(), headers={"X-Request-ID": "x" * 200})
+
+    assert len(response.headers["X-Request-ID"]) == 36
+
+
+def test_the_correlation_id_travels_with_the_job(client):
+    """The whole point: a worker log line has to be traceable back to the
+    request that submitted the job, and the request is long gone by then."""
+    from app.api.middleware import request_id_var
+    from app.redis.producer import _encode
+
+    seen = {}
+
+    async def capture(**kwargs):
+        # Read inside the request, where the contextvar is set.
+        seen["request_id"] = request_id_var.get()
+        return "1699-0"
+
+    with patch("app.api.routes.jobs.enqueue_job", new=capture):
+        client.post("/jobs", json=body(), headers={"X-Request-ID": "trace-abc-123"})
+
+    assert seen["request_id"] == "trace-abc-123"
+    assert _encode(uuid4(), "t.csv", "normal", {}, 0, 5, "trace-abc-123")["request_id"] == (
+        "trace-abc-123"
+    )

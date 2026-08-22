@@ -10,6 +10,7 @@ import logging
 import signal
 from uuid import UUID, uuid4
 
+from app.api.middleware import RequestIDFilter, request_id_var
 from app.config import get_settings
 from app.core.dlq import send_to_dlq
 from app.db.connection import dispose_engine
@@ -33,8 +34,10 @@ settings = get_settings()
 
 logging.basicConfig(
     level=settings.log_level,
-    format="%(asctime)s %(levelname)-5.5s [%(name)s] %(message)s",
+    format="%(asctime)s %(levelname)-5.5s [%(name)s] [%(request_id)s] %(message)s",
 )
+for _handler in logging.getLogger().handlers:
+    _handler.addFilter(RequestIDFilter())
 logger = logging.getLogger(__name__)
 
 # How long a message sits unacknowledged before another worker may take it
@@ -52,10 +55,14 @@ def _request_shutdown(signum: int, _frame: object = None) -> None:
 
 async def _handle(message: JobMessage, worker_name: str) -> None:
     """Execute one message and decide what happens to it on the stream."""
+    # Adopt the submitting request's ID for the duration of the job, which is
+    # what makes a worker log line traceable back to the caller.
+    token = request_id_var.set(message.request_id)
     JOBS_IN_FLIGHT.labels(worker_id=worker_name).inc()
     try:
         result = await execute(message, worker_name)
     finally:
+        request_id_var.reset(token)
         # In a finally, so a raised exception cannot leave the gauge stuck
         # above zero for the life of the process.
         JOBS_IN_FLIGHT.labels(worker_id=worker_name).dec()
