@@ -1,9 +1,10 @@
 """Message decoding, consumer group reads, and stale message reclaim."""
 
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
 import pytest
+from redis.exceptions import ResponseError
 
 from app.redis.consumer import (
     MalformedMessage,
@@ -130,3 +131,41 @@ async def test_claim_stale_reassigns_pending_messages():
     assert len(claimed.messages) == 1
     assert client.xautoclaim.await_args.kwargs["consumername"] == "worker-2"
     assert client.xautoclaim.await_args.kwargs["min_idle_time"] == 30_000
+
+
+async def test_a_missing_consumer_group_is_recreated_rather_than_fatal():
+    """Deleting a stream deletes its groups with it, and so does a FLUSHDB or a
+    failover onto an empty replica. Treating NOGROUP as fatal leaves the worker
+    dead long after the condition has cleared."""
+    client = AsyncMock()
+    client.xreadgroup.side_effect = [
+        ResponseError("NOGROUP No such key 'jobs.high' or consumer group 'job-workers'"),
+        [(STREAM_HIGH, [("1-0", fields())])],
+    ]
+
+    with patch("app.redis.consumer.ensure_consumer_groups", new=AsyncMock()) as recreate:
+        batch = await read_batch("worker-1", (STREAM_HIGH,), client=client)
+
+    recreate.assert_awaited_once()
+    assert len(batch.messages) == 1
+
+
+async def test_a_response_error_that_is_not_nogroup_still_raises():
+    """Recreating the group would be the wrong response to, say, a WRONGTYPE."""
+    client = AsyncMock()
+    client.xreadgroup.side_effect = ResponseError("WRONGTYPE Operation against a key")
+
+    with pytest.raises(ResponseError):
+        await read_batch("worker-1", (STREAM_HIGH,), client=client)
+
+
+async def test_reclaim_survives_a_missing_group():
+    client = AsyncMock()
+    client.xautoclaim.side_effect = ResponseError("NOGROUP No such key 'jobs.normal'")
+
+    with patch("app.redis.consumer.ensure_consumer_groups", new=AsyncMock()) as recreate:
+        batch = await claim_stale("worker-1", STREAM_NORMAL, client=client)
+
+    recreate.assert_awaited_once()
+    # Nothing is pending on a group that does not exist.
+    assert batch.messages == []

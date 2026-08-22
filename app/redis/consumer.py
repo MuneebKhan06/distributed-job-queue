@@ -13,8 +13,9 @@ from typing import Any
 from uuid import UUID
 
 from redis.asyncio import Redis
+from redis.exceptions import ResponseError
 
-from app.redis.client import get_redis
+from app.redis.client import ensure_consumer_groups, get_redis
 from app.redis.streams import CONSUMER_GROUP, WORK_STREAMS
 
 logger = logging.getLogger(__name__)
@@ -108,7 +109,8 @@ async def read_batch(
     client = client or get_redis()
 
     for stream in poll_streams:
-        response = await client.xreadgroup(
+        response = await _read_group(
+            client,
             groupname=CONSUMER_GROUP,
             consumername=worker_name,
             streams={stream: ">"},
@@ -119,7 +121,8 @@ async def read_batch(
         if batch.messages or batch.poison:
             return batch
 
-    response = await client.xreadgroup(
+    response = await _read_group(
+        client,
         groupname=CONSUMER_GROUP,
         consumername=worker_name,
         streams=dict.fromkeys(WORK_STREAMS, ">"),
@@ -127,6 +130,30 @@ async def read_batch(
         block=block_ms,
     )
     return _flatten(response)
+
+
+async def _read_group(client: Redis, **kwargs: Any) -> Any:
+    """XREADGROUP, recreating the group if it has gone missing.
+
+    The group is created once at startup, which is fine until the stream stops
+    existing. Deleting a stream deletes its groups with it, and so does a
+    FLUSHDB, a failover onto an empty replica, or trimming that removes every
+    entry. XREADGROUP then fails with NOGROUP on every pass, and a worker that
+    treats that as fatal stays dead until someone restarts it, long after the
+    condition has cleared.
+
+    Recreating and retrying once loses nothing: the group is rebuilt at the
+    stream's current position, and anything genuinely lost with the stream was
+    already gone before this ran.
+    """
+    try:
+        return await client.xreadgroup(**kwargs)
+    except ResponseError as exc:
+        if "NOGROUP" not in str(exc):
+            raise
+        logger.warning("Consumer group missing, recreating it: %s", exc)
+        await ensure_consumer_groups(client)
+        return await client.xreadgroup(**kwargs)
 
 
 def _flatten(response: Any) -> Batch:
@@ -174,13 +201,23 @@ async def claim_stale(
     executor checks the job's status in PostgreSQL before running it.
     """
     client = client or get_redis()
-    _cursor, entries, _deleted = await client.xautoclaim(
-        name=stream,
-        groupname=CONSUMER_GROUP,
-        consumername=worker_name,
-        min_idle_time=min_idle_ms,
-        count=count,
-    )
+    try:
+        _cursor, entries, _deleted = await client.xautoclaim(
+            name=stream,
+            groupname=CONSUMER_GROUP,
+            consumername=worker_name,
+            min_idle_time=min_idle_ms,
+            count=count,
+        )
+    except ResponseError as exc:
+        # Same reasoning as _read_group. Nothing is pending on a group that
+        # does not exist, so an empty batch is the honest answer.
+        if "NOGROUP" not in str(exc):
+            raise
+        logger.warning("Consumer group missing during reclaim: %s", exc)
+        await ensure_consumer_groups(client)
+        return Batch(messages=[], poison=[])
+
     batch = _flatten([(stream, entries)])
     if batch.messages:
         logger.info("Reclaimed %d stale messages from %s", len(batch.messages), stream)
