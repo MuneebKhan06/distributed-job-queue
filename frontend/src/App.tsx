@@ -1,3 +1,4 @@
+import HealthIndicator from "./components/HealthIndicator";
 import Layout, { type NavItem } from "./components/Layout";
 import { useHashRoute } from "./hooks/useHashRoute";
 import Placeholder from "./pages/Placeholder";
@@ -21,7 +22,12 @@ export default function App() {
   const active = NAV.find((item) => item.path === path) ?? NAV[0];
 
   return (
-    <Layout title={active.label} nav={NAV} activePath={active.path}>
+    <Layout
+      title={active.label}
+      nav={NAV}
+      activePath={active.path}
+      status={<HealthIndicator />}
+    >
       <Placeholder description={DESCRIPTIONS[active.path]} />
     </Layout>
   );
