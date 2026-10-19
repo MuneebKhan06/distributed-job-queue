@@ -194,3 +194,27 @@ regardless: that a payload survives JSON encoding onto a flat stream field,
 that a consumer group really does deliver each message to exactly one
 consumer, that the unique constraint behind `ON CONFLICT DO NOTHING` exists,
 and that the timestamps come from the database clock rather than the worker's.
+
+---
+
+## Frontend Pass 1: Shell and API contract
+
+A dashboard for submitting, watching, and replaying jobs, built in `frontend/`
+with Vite, React and TypeScript.
+
+- No CORS middleware was added to the API. The Vite dev server proxies `/api`
+  to FastAPI instead, so the browser only ever sees one origin. Opening the API
+  to cross origin requests is a production decision, and it should not be made
+  as a side effect of wanting hot reload.
+- `src/api/types.ts` is a hand written mirror of the Pydantic models. It could
+  be generated from the OpenAPI schema, but for five models the generator would
+  be more machinery than the types it saves.
+- Routing is on the URL hash. Deep links then work from any static file host
+  with no rewrite rule, which matters more here than tidy URLs.
+- The health indicator treats a failed request as the API being down, because
+  `/health` deliberately returns 200 with `degraded` in the body when Redis or
+  PostgreSQL is the problem.
+
+**Gotcha:** port 8000 on this machine was already taken by an unrelated
+service, which answered `/health` with an HTML page. The proxy target is
+configurable through `VITE_API_TARGET` for exactly this reason.
