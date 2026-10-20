@@ -11,6 +11,7 @@ import {
 import { PriorityBadge, StatusBadge } from "../components/Badge";
 import JobFilterBar, { type JobFilterValues } from "../components/JobFilterBar";
 import Pager from "../components/Pager";
+import RefreshControl from "../components/RefreshControl";
 import { useDebounced } from "../hooks/useDebounced";
 import { pushHash, replaceHash } from "../hooks/useHashRoute";
 import { usePolling } from "../hooks/usePolling";
@@ -60,6 +61,7 @@ export default function JobsPage({ params }: { params: URLSearchParams }) {
   const { status, priority, jobType, page } = query;
 
   const [typeDraft, setTypeDraft] = useState(jobType);
+  const [live, setLive] = useState(true);
   // Typing in the job type box should not send a request per keystroke.
   const settledType = useDebounced(typeDraft.trim(), 300);
   const lastWrittenType = useRef(jobType);
@@ -97,7 +99,7 @@ export default function JobsPage({ params }: { params: URLSearchParams }) {
       }),
     [status, priority, jobType, page],
   );
-  const { data, error, loading } = usePolling(fetchJobs, POLL_MS);
+  const { data, error, loading, updatedAt, refresh } = usePolling(fetchJobs, POLL_MS, live);
   const jobs = data ? data.slice(0, PAGE_SIZE) : null;
   const hasNext = data !== null && data.length > PAGE_SIZE;
 
@@ -122,10 +124,18 @@ export default function JobsPage({ params }: { params: URLSearchParams }) {
 
   return (
     <>
-      <JobFilterBar
-        value={{ status, priority, jobType: typeDraft }}
-        onChange={changeFilters}
-      />
+      <div className="toolbar">
+        <JobFilterBar
+          value={{ status, priority, jobType: typeDraft }}
+          onChange={changeFilters}
+        />
+        <RefreshControl
+          live={live}
+          updatedAt={updatedAt}
+          onToggle={() => setLive((current) => !current)}
+          onRefresh={refresh}
+        />
+      </div>
       {loading ? (
         <p className="muted">Loading jobs</p>
       ) : (

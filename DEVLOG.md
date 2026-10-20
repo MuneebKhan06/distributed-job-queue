@@ -218,3 +218,31 @@ with Vite, React and TypeScript.
 **Gotcha:** port 8000 on this machine was already taken by an unrelated
 service, which answered `/health` with an HTML page. The proxy target is
 configurable through `VITE_API_TARGET` for exactly this reason.
+
+---
+
+## Frontend Pass 2: Jobs list
+
+The jobs screen: a live table with filters, paging, and a URL that describes
+the view.
+
+- `GET /jobs` has no total count. Rather than add one to the API, and with it
+  a `COUNT(*)` over a table that grows without bound, the dashboard asks for
+  one row more than a page. If it arrives there is an older page. The cost is
+  that the pager cannot say "page 2 of 40", which nobody watching a queue
+  actually needs.
+- Filters, page and job type live in the hash query. Filter edits use
+  `replaceState` and paging uses a normal hash change, so Back steps through
+  pages and not keystrokes. `replaceState` fires no `hashchange`, so the
+  router listens for a small custom event as well.
+- The job type filter is an exact match, because that is what the repository
+  does. Faking a contains search on the client would only search the 50 rows
+  already loaded and quietly miss everything else.
+- The table can be paused. A live table reorders under the cursor as jobs
+  arrive, which makes it hard to follow a single row.
+
+**Gotcha:** making `usePolling` refetch when the filter changed exposed a race.
+Two requests in flight, one for the old filter and one for the new, could
+resolve in either order, and when the old one landed last the table showed
+rows the user had just filtered out. Each call is now numbered and only the
+latest is allowed to set state.

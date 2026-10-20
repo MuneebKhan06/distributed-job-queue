@@ -4,6 +4,7 @@ export interface PollingState<T> {
   data: T | null;
   error: Error | null;
   loading: boolean;
+  updatedAt: number | null;
   refresh: () => void;
 }
 
@@ -20,11 +21,19 @@ export interface PollingState<T> {
  * call is numbered, and a response is dropped if a newer call has started
  * since, otherwise a slow reply for the old filter could land after the new
  * one and overwrite it.
+ *
+ * With enabled false the interval stops, but a new fetcher still fetches once,
+ * so changing a filter on a paused screen still shows the matching rows.
  */
-export function usePolling<T>(fetcher: () => Promise<T>, intervalMs: number): PollingState<T> {
+export function usePolling<T>(
+  fetcher: () => Promise<T>,
+  intervalMs: number,
+  enabled = true,
+): PollingState<T> {
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<Error | null>(null);
   const [loading, setLoading] = useState(true);
+  const [updatedAt, setUpdatedAt] = useState<number | null>(null);
   const latestCall = useRef(0);
 
   const run = useCallback(async () => {
@@ -34,6 +43,7 @@ export function usePolling<T>(fetcher: () => Promise<T>, intervalMs: number): Po
       if (call === latestCall.current) {
         setData(result);
         setError(null);
+        setUpdatedAt(Date.now());
       }
     } catch (caught) {
       if (call === latestCall.current) {
@@ -48,13 +58,19 @@ export function usePolling<T>(fetcher: () => Promise<T>, intervalMs: number): Po
 
   useEffect(() => {
     void run();
+  }, [run]);
+
+  useEffect(() => {
+    if (!enabled) {
+      return;
+    }
     const timer = window.setInterval(() => {
       if (document.visibilityState === "visible") {
         void run();
       }
     }, intervalMs);
     return () => window.clearInterval(timer);
-  }, [run, intervalMs]);
+  }, [run, intervalMs, enabled]);
 
-  return { data, error, loading, refresh: run };
+  return { data, error, loading, updatedAt, refresh: run };
 }
