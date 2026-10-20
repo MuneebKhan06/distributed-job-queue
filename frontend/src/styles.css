@@ -220,3 +220,57 @@ a {
   color: var(--muted);
   border-style: dashed;
 }
+
+.mono {
+  font-family: var(--mono);
+  font-size: 13px;
+}
+
+.error {
+  color: var(--bad);
+  margin: 0 0 12px;
+}
+
+.table-card {
+  padding: 0;
+  overflow: hidden;
+}
+
+.table-card > .error,
+.table-card > .empty {
+  padding: 14px 20px;
+  margin: 0;
+}
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th,
+.table td {
+  text-align: left;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.table th {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.table tbody tr:hover {
+  background: var(--bg);
+}

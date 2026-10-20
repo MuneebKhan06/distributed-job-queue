@@ -1,6 +1,7 @@
 import HealthIndicator from "./components/HealthIndicator";
 import Layout, { type NavItem } from "./components/Layout";
 import { useHashRoute } from "./hooks/useHashRoute";
+import JobsPage from "./pages/JobsPage";
 import Placeholder from "./pages/Placeholder";
 
 const NAV: NavItem[] = [
@@ -28,7 +29,11 @@ export default function App() {
       activePath={active.path}
       status={<HealthIndicator />}
     >
-      <Placeholder description={DESCRIPTIONS[active.path]} />
+      {active.path === "/jobs" ? (
+        <JobsPage />
+      ) : (
+        <Placeholder description={DESCRIPTIONS[active.path]} />
+      )}
     </Layout>
   );
 }
