@@ -19,7 +19,7 @@ const DESCRIPTIONS: Record<string, string> = {
 };
 
 export default function App() {
-  const path = useHashRoute();
+  const { path, params } = useHashRoute();
   const active = NAV.find((item) => item.path === path) ?? NAV[0];
 
   return (
@@ -30,7 +30,7 @@ export default function App() {
       status={<HealthIndicator />}
     >
       {active.path === "/jobs" ? (
-        <JobsPage />
+        <JobsPage params={params} />
       ) : (
         <Placeholder description={DESCRIPTIONS[active.path]} />
       )}

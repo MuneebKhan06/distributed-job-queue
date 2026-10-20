@@ -1,22 +1,85 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { api } from "../api/client";
-import type { JobDetail } from "../api/types";
+import {
+  JOB_PRIORITIES,
+  JOB_STATUSES,
+  type JobDetail,
+  type JobPriority,
+  type JobStatus,
+} from "../api/types";
 import { PriorityBadge, StatusBadge } from "../components/Badge";
-import JobFilterBar, { EMPTY_FILTERS, type JobFilterValues } from "../components/JobFilterBar";
+import JobFilterBar, { type JobFilterValues } from "../components/JobFilterBar";
 import Pager from "../components/Pager";
 import { useDebounced } from "../hooks/useDebounced";
+import { pushHash, replaceHash } from "../hooks/useHashRoute";
 import { usePolling } from "../hooks/usePolling";
 import { formatTimestamp, timeAgo } from "../lib/time";
 
 const POLL_MS = 3000;
 const PAGE_SIZE = 50;
 
-export default function JobsPage() {
-  const [filters, setFilters] = useState<JobFilterValues>(EMPTY_FILTERS);
-  const [page, setPage] = useState(0);
+interface JobsQuery {
+  status: JobStatus | "";
+  priority: JobPriority | "";
+  jobType: string;
+  page: number;
+}
+
+// The URL is user editable, so anything it carries is checked against the
+// known values rather than passed straight to the API to be rejected there.
+function readQuery(params: URLSearchParams): JobsQuery {
+  const status = params.get("status") ?? "";
+  const priority = params.get("priority") ?? "";
+  const page = Number.parseInt(params.get("page") ?? "1", 10);
+  return {
+    status: (JOB_STATUSES as string[]).includes(status) ? (status as JobStatus) : "",
+    priority: (JOB_PRIORITIES as string[]).includes(priority) ? (priority as JobPriority) : "",
+    jobType: params.get("type") ?? "",
+    page: Number.isFinite(page) && page > 1 ? page - 1 : 0,
+  };
+}
+
+function writeQuery(query: JobsQuery, mode: "push" | "replace"): void {
+  const params = {
+    status: query.status || undefined,
+    priority: query.priority || undefined,
+    type: query.jobType || undefined,
+    // Shown to people, so one based.
+    page: query.page > 0 ? String(query.page + 1) : undefined,
+  };
+  (mode === "push" ? pushHash : replaceHash)("/jobs", params);
+}
+
+/**
+ * Filters and page live in the URL, so a view can be bookmarked or pasted to
+ * someone. The only local state is the job type box while it is being typed in.
+ */
+export default function JobsPage({ params }: { params: URLSearchParams }) {
+  const query = readQuery(params);
+  const { status, priority, jobType, page } = query;
+
+  const [typeDraft, setTypeDraft] = useState(jobType);
   // Typing in the job type box should not send a request per keystroke.
-  const jobType = useDebounced(filters.jobType.trim(), 300);
+  const settledType = useDebounced(typeDraft.trim(), 300);
+  const lastWrittenType = useRef(jobType);
+
+  useEffect(() => {
+    if (settledType !== lastWrittenType.current) {
+      lastWrittenType.current = settledType;
+      writeQuery({ status, priority, jobType: settledType, page: 0 }, "replace");
+    }
+  }, [settledType, status, priority]);
+
+  // The URL can also change from outside, for example the sidebar link
+  // clearing every filter. Copying that into the box is skipped when it is
+  // the value this page wrote itself, or a half typed draft would be cut off.
+  useEffect(() => {
+    if (jobType !== lastWrittenType.current) {
+      lastWrittenType.current = jobType;
+      setTypeDraft(jobType);
+    }
+  }, [jobType]);
 
   // The API matches job_type exactly, so a partial name finds nothing. That
   // is left as is rather than faked with client side matching over one page.
@@ -26,13 +89,13 @@ export default function JobsPage() {
   const fetchJobs = useCallback(
     () =>
       api.listJobs({
-        status: filters.status || undefined,
-        priority: filters.priority || undefined,
+        status: status || undefined,
+        priority: priority || undefined,
         job_type: jobType || undefined,
         limit: PAGE_SIZE + 1,
         offset: page * PAGE_SIZE,
       }),
-    [filters.status, filters.priority, jobType, page],
+    [status, priority, jobType, page],
   );
   const { data, error, loading } = usePolling(fetchJobs, POLL_MS);
   const jobs = data ? data.slice(0, PAGE_SIZE) : null;
@@ -41,13 +104,28 @@ export default function JobsPage() {
   // Page 3 of one filter means nothing under another, so a new filter always
   // starts again from the newest jobs.
   const changeFilters = (next: JobFilterValues) => {
-    setFilters(next);
-    setPage(0);
+    if (next.status !== status || next.priority !== priority) {
+      const nextType = next.jobType.trim();
+      lastWrittenType.current = nextType;
+      setTypeDraft(next.jobType);
+      writeQuery(
+        { status: next.status, priority: next.priority, jobType: nextType, page: 0 },
+        "replace",
+      );
+    } else {
+      setTypeDraft(next.jobType);
+    }
   };
+
+  // Paging leaves a history entry, so Back returns to the page before.
+  const changePage = (next: number) => writeQuery({ ...query, page: next }, "push");
 
   return (
     <>
-      <JobFilterBar value={filters} onChange={changeFilters} />
+      <JobFilterBar
+        value={{ status, priority, jobType: typeDraft }}
+        onChange={changeFilters}
+      />
       {loading ? (
         <p className="muted">Loading jobs</p>
       ) : (
@@ -58,7 +136,7 @@ export default function JobsPage() {
             pageSize={PAGE_SIZE}
             shown={jobs?.length ?? 0}
             hasNext={hasNext}
-            onPage={setPage}
+            onPage={changePage}
           />
         </>
       )}
