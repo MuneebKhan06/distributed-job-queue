@@ -177,3 +177,46 @@ a {
 .dot-bad {
   background: var(--bad);
 }
+
+.badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+}
+
+.status-queued {
+  color: var(--muted);
+}
+
+.status-running {
+  color: var(--accent);
+}
+
+.status-completed {
+  color: var(--ok);
+}
+
+.status-failed {
+  color: var(--warn);
+}
+
+.status-dead {
+  color: var(--bad);
+}
+
+.priority-high {
+  color: var(--bad);
+}
+
+.priority-normal {
+  color: var(--muted);
+}
+
+.priority-low {
+  color: var(--muted);
+  border-style: dashed;
+}
