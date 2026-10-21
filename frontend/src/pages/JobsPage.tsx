@@ -178,7 +178,7 @@ function JobsTable({ jobs, error }: { jobs: JobDetail[] | null; error: Error | n
               {jobs?.map((job) => (
                 <tr key={job.job_id}>
                   <td className="mono" title={job.job_id}>
-                    {job.job_id.slice(0, 8)}
+                    <a href={`#/jobs/${job.job_id}`}>{job.job_id.slice(0, 8)}</a>
                   </td>
                   <td className="mono">{job.job_type}</td>
                   <td>
