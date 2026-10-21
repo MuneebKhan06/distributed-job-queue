@@ -3,6 +3,7 @@ import { useCallback } from "react";
 import { ApiError, api } from "../api/client";
 import { PriorityBadge, StatusBadge } from "../components/Badge";
 import JobTimeline from "../components/JobTimeline";
+import JsonBlock from "../components/JsonBlock";
 import { usePolling } from "../hooks/usePolling";
 import { formatTimestamp } from "../lib/time";
 
@@ -69,7 +70,19 @@ export default function JobDetailPage({ jobId }: { jobId: string }) {
           </div>
         </dl>
       </section>
+      {/* On a failed job this is the last attempt's error, which may be
+          replaced on the next one. Completing clears it. */}
+      {job.error_message && (
+        <section className="card error-card">
+          <h2 className="card-title">
+            {job.status === "dead" ? "Final error" : "Last error"}
+          </h2>
+          <p className="error-text">{job.error_message}</p>
+        </section>
+      )}
       <JobTimeline job={job} />
+      {job.result && <JsonBlock title="Result" value={job.result} />}
+      <JsonBlock title="Payload" value={job.payload} />
     </div>
   );
 }

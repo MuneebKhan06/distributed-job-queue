@@ -476,3 +476,49 @@ button:disabled {
 .timeline-meta {
   font-size: 13px;
 }
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.card-header .card-title {
+  margin: 0;
+}
+
+.small-button {
+  font-size: 12px;
+  padding: 3px 10px;
+}
+
+.json {
+  margin: 0;
+  padding: 12px 14px;
+  max-height: 420px;
+  overflow: auto;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.error-card {
+  border-color: var(--bad);
+}
+
+.error-card .card-title {
+  color: var(--bad);
+}
+
+.error-text {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: var(--mono);
+  font-size: 13px;
+}
