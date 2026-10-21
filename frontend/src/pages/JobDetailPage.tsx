@@ -1,17 +1,32 @@
-import { useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { ApiError, api } from "../api/client";
+import type { JobStatus } from "../api/types";
 import { PriorityBadge, StatusBadge } from "../components/Badge";
 import JobTimeline from "../components/JobTimeline";
 import JsonBlock from "../components/JsonBlock";
 import { usePolling } from "../hooks/usePolling";
 import { formatTimestamp } from "../lib/time";
 
-const POLL_MS = 2000;
+const ACTIVE_POLL_MS = 2000;
+const SETTLED_POLL_MS = 15000;
+
+// Completed and dead are the only states a job does not leave on its own.
+const SETTLED: JobStatus[] = ["completed", "dead"];
 
 export default function JobDetailPage({ jobId }: { jobId: string }) {
   const fetchJob = useCallback(() => api.getJob(jobId), [jobId]);
-  const { data: job, error, loading } = usePolling(fetchJob, POLL_MS);
+
+  // A finished job is polled slowly rather than not at all. Replaying a dead
+  // job from the DLQ screen, or from the CLI, sends it back to queued, and a
+  // page that had stopped polling would go on showing it as dead.
+  const [settled, setSettled] = useState(false);
+  const { data: job, error, loading } = usePolling(
+    fetchJob,
+    settled ? SETTLED_POLL_MS : ACTIVE_POLL_MS,
+  );
+  const isSettled = job ? SETTLED.includes(job.status) : false;
+  useEffect(() => setSettled(isSettled), [isSettled]);
 
   if (loading) {
     return <p className="muted">Loading job</p>;

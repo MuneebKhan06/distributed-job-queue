@@ -246,3 +246,29 @@ Two requests in flight, one for the old filter and one for the new, could
 resolve in either order, and when the old one landed last the table showed
 rows the user had just filtered out. Each call is now numbered and only the
 latest is allowed to set state.
+
+---
+
+## Frontend Pass 3: Job detail
+
+One page per job at `#/jobs/<id>`: the fields, a timeline, the error, and the
+payload and result as JSON.
+
+- The timeline is built from the three timestamps the schema design kept
+  separate in Pass 1, and it is the first place they pay off visibly: queue
+  wait is `started_at - submitted_at` and run time is
+  `completed_at - started_at`, with no extra columns needed.
+- `mark_running` overwrites `started_at` on every attempt. On a retried job the
+  "wait" therefore includes every earlier attempt and its backoff, and the
+  page says so rather than presenting it as time spent on the stream. Keeping
+  per attempt history would need an attempts table, which is a backend change
+  and out of scope for a dashboard.
+- The error card sits above the timeline. A failing job should explain itself
+  before anything else on the page.
+- Finished jobs poll every 15 seconds instead of every 2. Stopping entirely
+  looks tempting but would be wrong: a replay sends a dead job back to
+  `queued`, and a page that had stopped polling would go on showing it as dead.
+
+**Gotcha:** the clipboard API only exists on secure origins. `localhost`
+qualifies, but the same build opened over plain HTTP on a LAN address has no
+`navigator.clipboard`, so the copy button is hidden there instead of failing.
