@@ -405,3 +405,74 @@ button:disabled {
 .fields dd {
   margin: 0;
 }
+
+.card-title {
+  font-size: 14px;
+  margin: 0 0 14px;
+}
+
+.timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.timeline-step {
+  position: relative;
+  display: flex;
+  gap: 14px;
+  padding-bottom: 18px;
+}
+
+.timeline-step:last-child {
+  padding-bottom: 0;
+}
+
+/* The line joining one marker to the next. */
+.timeline-step:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 16px;
+  bottom: 0;
+  width: 2px;
+  background: var(--border);
+}
+
+.timeline-marker {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  margin-top: 4px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  background: var(--surface);
+}
+
+.step-done .timeline-marker {
+  background: var(--ok);
+  border-color: var(--ok);
+}
+
+.step-current .timeline-marker {
+  border-color: var(--accent);
+  background: var(--accent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+.step-failed .timeline-marker {
+  background: var(--bad);
+  border-color: var(--bad);
+}
+
+.step-pending .timeline-label {
+  color: var(--muted);
+}
+
+.timeline-label {
+  font-weight: 600;
+}
+
+.timeline-meta {
+  font-size: 13px;
+}
