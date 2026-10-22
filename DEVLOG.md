@@ -272,3 +272,35 @@ payload and result as JSON.
 **Gotcha:** the clipboard API only exists on secure origins. `localhost`
 qualifies, but the same build opened over plain HTTP on a LAN address has no
 `navigator.clipboard`, so the copy button is hidden there instead of failing.
+
+---
+
+## Frontend Pass 4: Submit form
+
+A form for sending jobs, starting from one example payload per handler.
+
+- The presets only use fields their handlers read, and they contain the
+  problems each handler exists to deal with: a duplicate row, mixed date
+  formats, a boolean where an integer belongs. Running them shows the result
+  doing something, which an all valid example would not.
+- The browser checks the same rules as `JobSubmission` before sending, but the
+  API stays the authority. A 422 is split by `loc` and each message is shown
+  under its field, so anything the client missed still lands in the right
+  place. Pydantic prefixes custom validator messages with "Value error, ",
+  which is stripped.
+- The API never looks inside the payload, so a transform job without
+  `operations` is accepted with a 202 and then sent straight to the DLQ by
+  `require()` on the worker, with no retries. The form warns about that case
+  but does not block it, because submitting a bad job on purpose is a fair
+  way to test the DLQ.
+- The optional job ID is the idempotency key. A 409 is reported as "already
+  accepted, nothing queued twice", which is what it means, and links to the
+  existing job.
+
+**Gotcha:** `frontend/src/lib/time.ts` had never been committed. The root
+`.gitignore` came from the Python template, and its `lib/` rule also matched
+the dashboard's `src/lib/`. Every build passed locally because the file was on
+disk, and the badges, table and timeline that import it would have failed from
+a fresh clone. Found only because a new file in the same directory refused to
+stage. The frontend ignore file now re-includes `src/lib/`, and builds are
+checked from a clean clone of the commit rather than the working tree.

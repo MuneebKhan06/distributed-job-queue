@@ -650,3 +650,27 @@ button:disabled {
     grid-template-columns: 1fr auto;
   }
 }
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.field-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.field-header label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.field .field-error,
+.field-hint {
+  font-size: 12px;
+}

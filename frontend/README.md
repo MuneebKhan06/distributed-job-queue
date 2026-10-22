@@ -44,7 +44,7 @@ src/
 |   |-- client.ts         # fetch wrapper and one function per endpoint
 |-- components/           # Layout, health, badges, filters, pager
 |-- hooks/                # Hash routing, polling, debounce
-|-- lib/                  # Time formatting
+|-- lib/                  # Time formatting, presets, submission checks
 |-- pages/                # One file per screen
 |-- styles.css            # Theme variables, light and dark
 ```

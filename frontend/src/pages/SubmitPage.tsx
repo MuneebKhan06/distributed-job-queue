@@ -1,4 +1,4 @@
-import { type FormEvent, useState } from "react";
+import { type FormEvent, type KeyboardEvent, useState } from "react";
 
 import { ApiError, api } from "../api/client";
 import { JOB_PRIORITIES, type JobAccepted, type JobPriority } from "../api/types";
@@ -53,6 +53,19 @@ export default function SubmitPage() {
     setter(value);
     if (serverErrors[field]) {
       setServerErrors(({ [field]: _cleared, ...rest }) => rest);
+    }
+  };
+
+  // Reaching for the mouse after editing a large payload is the slow part of
+  // sending test jobs. requestSubmit runs the form's own submit handler, so
+  // the same checks apply as for the button. It ignores the button's disabled
+  // attribute, which is why the in flight guard is repeated here.
+  const submitOnShortcut = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+      event.preventDefault();
+      if (!submitting) {
+        event.currentTarget.form?.requestSubmit();
+      }
     }
   };
 
@@ -159,18 +172,40 @@ export default function SubmitPage() {
             {shown.maxAttempts && <span className="field-error">{shown.maxAttempts}</span>}
           </label>
         </div>
-        <label>
-          Payload
+        {/* Not wrapped in a label like the other fields: a button inside a
+            label forwards its clicks to the textarea. */}
+        <div className="field">
+          <div className="field-header">
+            <label htmlFor="payload">Payload</label>
+            <button
+              type="button"
+              className="small-button"
+              disabled={!check.payload}
+              title="Re-indent the payload. Needs valid JSON."
+              onClick={() => check.payload && setPayloadText(formatPayload(check.payload))}
+            >
+              Format JSON
+            </button>
+          </div>
           <textarea
+            id="payload"
             className="payload-editor"
             spellCheck={false}
             rows={16}
             value={payloadText}
             aria-invalid={Boolean(shown.payloadText)}
+            aria-describedby="payload-hint"
             onChange={(event) => edit("payloadText", setPayloadText, event.target.value)}
+            onKeyDown={submitOnShortcut}
           />
-          {shown.payloadText && <span className="field-error">{shown.payloadText}</span>}
-        </label>
+          {shown.payloadText ? (
+            <span className="field-error">{shown.payloadText}</span>
+          ) : (
+            <span id="payload-hint" className="muted field-hint">
+              Ctrl+Enter or Cmd+Enter submits from here.
+            </span>
+          )}
+        </div>
 
         {check.warnings.map((warning) => (
           <p key={warning} className="warning">
