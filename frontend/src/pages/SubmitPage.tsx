@@ -3,6 +3,7 @@ import { type FormEvent, useState } from "react";
 import { api } from "../api/client";
 import { JOB_PRIORITIES, type JobAccepted, type JobPriority } from "../api/types";
 import { formatPayload, JOB_PRESETS } from "../lib/presets";
+import { checkDraft } from "../lib/validateSubmission";
 
 const DEFAULT_MAX_ATTEMPTS = 5;
 
@@ -15,6 +16,13 @@ export default function SubmitPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [accepted, setAccepted] = useState<JobAccepted | null>(null);
+  // Errors stay hidden until the first submit, so the form does not open by
+  // scolding someone who has not finished typing.
+  const [attempted, setAttempted] = useState(false);
+
+  const check = checkDraft({ jobType, maxAttempts, payloadText });
+  const shown = attempted ? check.errors : {};
+  const isValid = Object.keys(check.errors).length === 0;
 
   const applyPreset = (index: number) => {
     const preset = JOB_PRESETS[index];
@@ -27,12 +35,10 @@ export default function SubmitPage() {
     event.preventDefault();
     setError(null);
     setAccepted(null);
+    setAttempted(true);
 
-    let payload;
-    try {
-      payload = JSON.parse(payloadText);
-    } catch {
-      setError("The payload is not valid JSON.");
+    const { payload } = check;
+    if (!isValid || !payload) {
       return;
     }
 
@@ -76,7 +82,12 @@ export default function SubmitPage() {
         <div className="form-row">
           <label>
             Job type
-            <input value={jobType} onChange={(event) => setJobType(event.target.value)} />
+            <input
+              value={jobType}
+              aria-invalid={Boolean(shown.jobType)}
+              onChange={(event) => setJobType(event.target.value)}
+            />
+            {shown.jobType && <span className="field-error">{shown.jobType}</span>}
           </label>
           <label>
             Priority
@@ -98,8 +109,10 @@ export default function SubmitPage() {
               min={1}
               max={20}
               value={maxAttempts}
+              aria-invalid={Boolean(shown.maxAttempts)}
               onChange={(event) => setMaxAttempts(event.target.value)}
             />
+            {shown.maxAttempts && <span className="field-error">{shown.maxAttempts}</span>}
           </label>
         </div>
         <label>
@@ -109,14 +122,26 @@ export default function SubmitPage() {
             spellCheck={false}
             rows={16}
             value={payloadText}
+            aria-invalid={Boolean(shown.payloadText)}
             onChange={(event) => setPayloadText(event.target.value)}
           />
+          {shown.payloadText && <span className="field-error">{shown.payloadText}</span>}
         </label>
+
+        {check.warnings.map((warning) => (
+          <p key={warning} className="warning">
+            {warning}
+          </p>
+        ))}
 
         {error && <p className="error">{error}</p>}
 
         <div className="form-actions">
-          <button type="submit" className="primary-button" disabled={submitting}>
+          <button
+            type="submit"
+            className="primary-button"
+            disabled={submitting || (attempted && !isValid)}
+          >
             {submitting ? "Submitting" : "Submit job"}
           </button>
         </div>

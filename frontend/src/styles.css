@@ -603,3 +603,20 @@ button:disabled {
   margin: 0;
   word-break: break-all;
 }
+
+.field-error {
+  font-weight: 400;
+  color: var(--bad);
+}
+
+[aria-invalid="true"] {
+  border-color: var(--bad);
+}
+
+.warning {
+  margin: 0;
+  padding: 8px 12px;
+  border-left: 3px solid var(--warn);
+  background: var(--bg);
+  font-size: 13px;
+}
