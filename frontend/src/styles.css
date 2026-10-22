@@ -620,3 +620,7 @@ button:disabled {
   background: var(--bg);
   font-size: 13px;
 }
+
+.wide-field {
+  grid-column: 1 / -1;
+}

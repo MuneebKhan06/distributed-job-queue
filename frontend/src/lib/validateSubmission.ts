@@ -1,6 +1,7 @@
 import { KNOWN_JOB_TYPE_PREFIXES, type Payload } from "../api/types";
 
 export interface SubmissionDraft {
+  jobId: string;
   jobType: string;
   maxAttempts: string;
   payloadText: string;
@@ -14,6 +15,16 @@ export interface DraftCheck {
   warnings: string[];
   payload: Payload | null;
 }
+
+// Wire field names, as they appear in a 422's loc, mapped to the form fields.
+export const WIRE_FIELDS: Record<string, keyof SubmissionDraft> = {
+  job_id: "jobId",
+  job_type: "jobType",
+  max_attempts: "maxAttempts",
+  payload: "payloadText",
+};
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // The API does not look inside the payload, so a missing field is only found
 // when a worker raises PermanentJobError and the job goes straight to the DLQ.
@@ -32,6 +43,11 @@ const REQUIRED_PAYLOAD_KEYS: Record<string, string[]> = {
 export function checkDraft(draft: SubmissionDraft): DraftCheck {
   const errors: FieldErrors = {};
   const warnings: string[] = [];
+
+  const jobId = draft.jobId.trim();
+  if (jobId && !UUID.test(jobId)) {
+    errors.jobId = "Must be a UUID, or left empty to generate one.";
+  }
 
   const jobType = draft.jobType.trim();
   const prefix = jobType.split(".", 1)[0];

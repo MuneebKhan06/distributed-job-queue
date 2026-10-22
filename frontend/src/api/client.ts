@@ -14,10 +14,18 @@ export class ApiError extends Error {
   constructor(
     readonly status: number,
     message: string,
+    // For a 422, each body field's message keyed by its wire name, such as
+    // job_type or payload. Empty for every other status.
+    readonly fieldErrors: Record<string, string> = {},
   ) {
     super(message);
     this.name = "ApiError";
   }
+}
+
+interface ValidationIssue {
+  loc?: unknown[];
+  msg?: string;
 }
 
 // FastAPI reports a 404 or 409 as a string detail, and a 422 as a list of
@@ -28,13 +36,30 @@ function describeDetail(detail: unknown): string | null {
   }
   if (Array.isArray(detail)) {
     return detail
-      .map((item) => {
+      .map((item: ValidationIssue) => {
         const field = Array.isArray(item?.loc) ? item.loc.slice(1).join(".") : "";
         return field ? `${field}: ${item?.msg}` : String(item?.msg);
       })
       .join("; ");
   }
   return null;
+}
+
+// loc is ["body", field, ...] for a problem inside the request body. Only the
+// top level field is kept, since that is what a form can point at.
+function fieldErrorsFrom(detail: unknown): Record<string, string> {
+  const errors: Record<string, string> = {};
+  if (!Array.isArray(detail)) {
+    return errors;
+  }
+  for (const item of detail as ValidationIssue[]) {
+    const loc = Array.isArray(item?.loc) ? item.loc : [];
+    if (loc[0] === "body" && typeof loc[1] === "string" && item.msg && !errors[loc[1]]) {
+      // Pydantic prefixes validator messages with "Value error, ".
+      errors[loc[1]] = item.msg.replace(/^Value error, /, "");
+    }
+  }
+  return errors;
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -45,13 +70,15 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!response.ok) {
     let message = `${response.status} ${response.statusText}`;
+    let fieldErrors: Record<string, string> = {};
     try {
       const body = await response.json();
       message = describeDetail(body?.detail) ?? message;
+      fieldErrors = fieldErrorsFrom(body?.detail);
     } catch {
       // Not JSON, most likely a proxy error page. The status line will do.
     }
-    throw new ApiError(response.status, message);
+    throw new ApiError(response.status, message, fieldErrors);
   }
 
   return (await response.json()) as T;
