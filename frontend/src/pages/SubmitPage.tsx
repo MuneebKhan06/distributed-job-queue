@@ -2,6 +2,8 @@ import { type FormEvent, useState } from "react";
 
 import { ApiError, api } from "../api/client";
 import { JOB_PRIORITIES, type JobAccepted, type JobPriority } from "../api/types";
+import RecentSubmissions from "../components/RecentSubmissions";
+import { useRecentSubmissions } from "../hooks/useRecentSubmissions";
 import { formatPayload, JOB_PRESETS } from "../lib/presets";
 import { checkDraft, type FieldErrors, WIRE_FIELDS } from "../lib/validateSubmission";
 
@@ -29,6 +31,7 @@ export default function SubmitPage() {
   // Errors stay hidden until the first submit, so the form does not open by
   // scolding someone who has not finished typing.
   const [attempted, setAttempted] = useState(false);
+  const recent = useRecentSubmissions();
 
   const check = checkDraft({ jobId, jobType, maxAttempts, payloadText });
   const shown: FieldErrors = { ...serverErrors, ...(attempted ? check.errors : {}) };
@@ -67,15 +70,19 @@ export default function SubmitPage() {
 
     setSubmitting(true);
     try {
-      setAccepted(
-        await api.submitJob({
-          job_id: jobId.trim() || undefined,
-          job_type: jobType.trim(),
-          priority,
-          max_attempts: Number(maxAttempts),
-          payload,
-        }),
-      );
+      const result = await api.submitJob({
+        job_id: jobId.trim() || undefined,
+        job_type: jobType.trim(),
+        priority,
+        max_attempts: Number(maxAttempts),
+        payload,
+      });
+      setAccepted(result);
+      recent.add({
+        jobId: result.job_id,
+        jobType: jobType.trim(),
+        submittedAt: new Date().toISOString(),
+      });
     } catch (caught) {
       const fieldErrors = caught instanceof ApiError ? toFormErrors(caught.fieldErrors) : {};
       setServerErrors(fieldErrors);
@@ -205,6 +212,8 @@ export default function SubmitPage() {
           </p>
         </section>
       )}
+
+      <RecentSubmissions entries={recent.entries} onClear={recent.clear} />
     </div>
   );
 }

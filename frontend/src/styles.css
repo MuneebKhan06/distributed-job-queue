@@ -624,3 +624,29 @@ button:disabled {
 .wide-field {
   grid-column: 1 / -1;
 }
+
+.recent {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.recent li {
+  display: grid;
+  grid-template-columns: 90px 1fr auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.recent li:last-child {
+  border-bottom: none;
+}
+
+@media (max-width: 720px) {
+  .recent li {
+    grid-template-columns: 1fr auto;
+  }
+}
