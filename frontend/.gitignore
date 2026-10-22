@@ -2,3 +2,7 @@ node_modules/
 dist/
 *.tsbuildinfo
 .env.local
+
+# The root .gitignore drops lib/ for Python build output, which would also
+# swallow the dashboard's own source directory.
+!src/lib/
