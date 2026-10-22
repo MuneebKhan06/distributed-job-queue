@@ -4,6 +4,7 @@ import { useHashRoute } from "./hooks/useHashRoute";
 import JobDetailPage from "./pages/JobDetailPage";
 import JobsPage from "./pages/JobsPage";
 import Placeholder from "./pages/Placeholder";
+import SubmitPage from "./pages/SubmitPage";
 
 const NAV: NavItem[] = [
   { path: "/", label: "Overview" },
@@ -38,6 +39,8 @@ export default function App() {
     page = <JobDetailPage key={jobId} jobId={jobId} />;
   } else if (active.path === "/jobs") {
     page = <JobsPage params={params} />;
+  } else if (active.path === "/submit") {
+    page = <SubmitPage />;
   } else {
     page = <Placeholder description={DESCRIPTIONS[active.path]} />;
   }

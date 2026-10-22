@@ -522,3 +522,84 @@ button:disabled {
   font-family: var(--mono);
   font-size: 13px;
 }
+
+.presets {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.preset {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+  padding: 12px 14px;
+  font-size: 13px;
+}
+
+.preset-active {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 16px;
+}
+
+.payload-editor {
+  font: 13px/1.45 var(--mono);
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  resize: vertical;
+  tab-size: 2;
+}
+
+.form .error {
+  margin: 0;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.primary-button {
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
+.success-card {
+  border-color: var(--ok);
+}
+
+.success-card .card-title {
+  color: var(--ok);
+}
+
+.success-card p {
+  margin: 0;
+  word-break: break-all;
+}
