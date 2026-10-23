@@ -5,6 +5,7 @@ import type { JobStatus } from "../api/types";
 import { PriorityBadge, StatusBadge } from "../components/Badge";
 import JobTimeline from "../components/JobTimeline";
 import JsonBlock from "../components/JsonBlock";
+import ReplayButton from "../components/ReplayButton";
 import { usePolling } from "../hooks/usePolling";
 import { formatTimestamp } from "../lib/time";
 
@@ -21,7 +22,7 @@ export default function JobDetailPage({ jobId }: { jobId: string }) {
   // job from the DLQ screen, or from the CLI, sends it back to queued, and a
   // page that had stopped polling would go on showing it as dead.
   const [settled, setSettled] = useState(false);
-  const { data: job, error, loading } = usePolling(
+  const { data: job, error, loading, refresh } = usePolling(
     fetchJob,
     settled ? SETTLED_POLL_MS : ACTIVE_POLL_MS,
   );
@@ -57,6 +58,16 @@ export default function JobDetailPage({ jobId }: { jobId: string }) {
         <div className="detail-heading">
           <span className="mono">{job.job_id}</span>
           <StatusBadge status={job.status} />
+          {/* Only offered while dead. The DLQ screen is where a job that has
+              already been replayed can be replayed again, with the warning
+              that goes with it. A replay resets the job to queued, and the
+              refresh moves this page back to fast polling to follow it. */}
+          {job.status === "dead" && (
+            <span className="heading-actions">
+              <ReplayButton jobId={job.job_id} status="dead" onReplayed={refresh} />
+              <a href="#/dlq">Dead letter queue</a>
+            </span>
+          )}
         </div>
         <dl className="fields">
           <div>

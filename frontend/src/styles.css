@@ -774,3 +774,12 @@ button:disabled {
   color: var(--ok);
   font-size: 12px;
 }
+
+.heading-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+  font-size: 13px;
+  word-break: normal;
+}
