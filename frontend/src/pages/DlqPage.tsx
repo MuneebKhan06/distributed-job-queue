@@ -5,13 +5,14 @@ import type { DLQEntry } from "../api/types";
 import { StatusBadge } from "../components/Badge";
 import JsonBlock from "../components/JsonBlock";
 import Pager from "../components/Pager";
+import ReplayButton from "../components/ReplayButton";
 import { type CurrentStatus, useJobStatuses } from "../hooks/useJobStatuses";
 import { usePolling } from "../hooks/usePolling";
 import { formatTimestamp, timeAgo } from "../lib/time";
 
 const POLL_MS = 5000;
 const PAGE_SIZE = 25;
-const COLUMNS = 7;
+const COLUMNS = 8;
 
 // dlq_jobs has no unique job_id: a job that is replayed and dies again gets a
 // second row. The failure time tells two rows for one job apart.
@@ -47,7 +48,7 @@ export default function DlqPage() {
   // A DLQ row is a record of a failure, not of the job's present state. The
   // row stays after a replay, so without this a job that has since completed
   // looks exactly like one that is still dead.
-  const { data: statuses } = useJobStatuses(
+  const { data: statuses, refresh: refreshStatuses } = useJobStatuses(
     entries?.map((entry) => entry.job_id) ?? [],
     POLL_MS,
   );
@@ -77,6 +78,7 @@ export default function DlqPage() {
                   <th>Attempts</th>
                   <th>Failed</th>
                   <th>Now</th>
+                  <th aria-label="Actions" />
                 </tr>
               </thead>
               <tbody>
@@ -113,6 +115,18 @@ export default function DlqPage() {
                             <span className="muted">Earlier failure</span>
                           ) : (
                             <CurrentStatusCell status={statuses?.get(entry.job_id)} />
+                          )}
+                        </td>
+                        <td>
+                          {/* One button per job, on its latest failure. Two
+                              buttons for the same job would be two ways to
+                              queue it twice. */}
+                          {!earlier.has(key) && (
+                            <ReplayButton
+                              jobId={entry.job_id}
+                              status={statuses?.get(entry.job_id)}
+                              onReplayed={refreshStatuses}
+                            />
                           )}
                         </td>
                       </tr>

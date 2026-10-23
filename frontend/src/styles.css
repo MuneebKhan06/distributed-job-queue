@@ -725,3 +725,52 @@ button:disabled {
   margin: 8px 0 0;
   font-size: 13px;
 }
+
+.dialog {
+  width: min(520px, calc(100vw - 32px));
+  padding: 20px 22px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.dialog::backdrop {
+  background: rgb(0 0 0 / 45%);
+}
+
+.dialog-title {
+  font-size: 16px;
+  margin: 0 0 12px;
+}
+
+.dialog-body p {
+  margin: 0 0 12px;
+  word-break: break-word;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.caution-button {
+  color: #fff;
+  background: var(--warn);
+  border-color: var(--warn);
+  font-weight: 600;
+}
+
+.replay {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.replay-ok {
+  color: var(--ok);
+  font-size: 12px;
+}
