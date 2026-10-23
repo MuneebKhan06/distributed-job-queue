@@ -2,7 +2,9 @@ import { useCallback, useState } from "react";
 
 import { api } from "../api/client";
 import type { DLQEntry } from "../api/types";
+import { StatusBadge } from "../components/Badge";
 import Pager from "../components/Pager";
+import { type CurrentStatus, useJobStatuses } from "../hooks/useJobStatuses";
 import { usePolling } from "../hooks/usePolling";
 import { formatTimestamp, timeAgo } from "../lib/time";
 
@@ -28,6 +30,15 @@ export default function DlqPage() {
   const entries = data ? data.slice(0, PAGE_SIZE) : null;
   const hasNext = data !== null && data.length > PAGE_SIZE;
 
+  // A DLQ row is a record of a failure, not of the job's present state. The
+  // row stays after a replay, so without this a job that has since completed
+  // looks exactly like one that is still dead.
+  const { data: statuses } = useJobStatuses(
+    entries?.map((entry) => entry.job_id) ?? [],
+    POLL_MS,
+  );
+  const earlier = earlierFailures(entries ?? []);
+
   if (loading) {
     return <p className="muted">Loading the dead letter queue</p>;
   }
@@ -50,6 +61,7 @@ export default function DlqPage() {
                   <th>Error</th>
                   <th>Attempts</th>
                   <th>Failed</th>
+                  <th>Now</th>
                 </tr>
               </thead>
               <tbody>
@@ -64,6 +76,13 @@ export default function DlqPage() {
                     </td>
                     <td>{entry.attempt_count}</td>
                     <td title={formatTimestamp(entry.failed_at)}>{timeAgo(entry.failed_at)}</td>
+                    <td>
+                      {earlier.has(entryKey(entry)) ? (
+                        <span className="muted">Earlier failure</span>
+                      ) : (
+                        <CurrentStatusCell status={statuses?.get(entry.job_id)} />
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -79,5 +98,43 @@ export default function DlqPage() {
         onPage={setPage}
       />
     </>
+  );
+}
+
+/**
+ * Rows for a job that also has a newer row on this page.
+ *
+ * Entries arrive newest first, so the first row seen for a job is its latest
+ * failure and only that one is worth a current status. Limited to the page:
+ * an older failure whose newer row is on an earlier page still shows a status,
+ * which is the same status and so is not wrong, only repeated.
+ */
+function earlierFailures(entries: DLQEntry[]): Set<string> {
+  const seen = new Set<string>();
+  const earlier = new Set<string>();
+  for (const entry of entries) {
+    if (seen.has(entry.job_id)) {
+      earlier.add(entryKey(entry));
+    }
+    seen.add(entry.job_id);
+  }
+  return earlier;
+}
+
+function CurrentStatusCell({ status }: { status: CurrentStatus | undefined }) {
+  if (status === undefined) {
+    return <span className="muted">Checking</span>;
+  }
+  if (status === "missing") {
+    return <span className="muted">Job row gone</span>;
+  }
+  if (status === "dead") {
+    return <StatusBadge status="dead" />;
+  }
+  // Anything else means it was replayed and has moved on since.
+  return (
+    <span className="replayed">
+      <span className="muted">Replayed,</span> <StatusBadge status={status} />
+    </span>
   );
 }
