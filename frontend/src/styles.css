@@ -692,3 +692,36 @@ button:disabled {
   gap: 6px;
   white-space: nowrap;
 }
+
+.expand-button {
+  border: none;
+  background: none;
+  padding: 0 4px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.table tbody tr.row-open {
+  background: var(--bg);
+}
+
+.table tbody tr.row-details:hover {
+  background: none;
+}
+
+.row-details > td {
+  white-space: normal;
+  padding: 16px 20px 20px;
+}
+
+.entry-details {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 900px;
+}
+
+.entry-meta {
+  margin: 8px 0 0;
+  font-size: 13px;
+}

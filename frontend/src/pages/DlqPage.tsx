@@ -1,8 +1,9 @@
-import { useCallback, useState } from "react";
+import { Fragment, useCallback, useState } from "react";
 
 import { api } from "../api/client";
 import type { DLQEntry } from "../api/types";
 import { StatusBadge } from "../components/Badge";
+import JsonBlock from "../components/JsonBlock";
 import Pager from "../components/Pager";
 import { type CurrentStatus, useJobStatuses } from "../hooks/useJobStatuses";
 import { usePolling } from "../hooks/usePolling";
@@ -10,6 +11,7 @@ import { formatTimestamp, timeAgo } from "../lib/time";
 
 const POLL_MS = 5000;
 const PAGE_SIZE = 25;
+const COLUMNS = 7;
 
 // dlq_jobs has no unique job_id: a job that is replayed and dies again gets a
 // second row. The failure time tells two rows for one job apart.
@@ -19,6 +21,18 @@ export function entryKey(entry: DLQEntry): string {
 
 export default function DlqPage() {
   const [page, setPage] = useState(0);
+  // Keyed by entryKey so an open row stays open across polls, and so opening
+  // one failure of a job does not open its other failures too.
+  const [open, setOpen] = useState<Set<string>>(new Set());
+
+  const toggle = (key: string) =>
+    setOpen((current) => {
+      const next = new Set(current);
+      if (!next.delete(key)) {
+        next.add(key);
+      }
+      return next;
+    });
 
   // Same trick as the jobs table: one extra row says whether an older page
   // exists, since the endpoint returns no total.
@@ -56,6 +70,7 @@ export default function DlqPage() {
             <table className="table">
               <thead>
                 <tr>
+                  <th aria-label="Details" />
                   <th>Job</th>
                   <th>Type</th>
                   <th>Error</th>
@@ -65,26 +80,52 @@ export default function DlqPage() {
                 </tr>
               </thead>
               <tbody>
-                {entries?.map((entry) => (
-                  <tr key={entryKey(entry)}>
-                    <td className="mono" title={entry.job_id}>
-                      <a href={`#/jobs/${entry.job_id}`}>{entry.job_id.slice(0, 8)}</a>
-                    </td>
-                    <td className="mono">{entry.job_type ?? "unknown"}</td>
-                    <td className="error-cell" title={entry.error_reason}>
-                      {entry.error_reason}
-                    </td>
-                    <td>{entry.attempt_count}</td>
-                    <td title={formatTimestamp(entry.failed_at)}>{timeAgo(entry.failed_at)}</td>
-                    <td>
-                      {earlier.has(entryKey(entry)) ? (
-                        <span className="muted">Earlier failure</span>
-                      ) : (
-                        <CurrentStatusCell status={statuses?.get(entry.job_id)} />
+                {entries?.map((entry) => {
+                  const key = entryKey(entry);
+                  const isOpen = open.has(key);
+                  return (
+                    <Fragment key={key}>
+                      <tr className={isOpen ? "row-open" : undefined}>
+                        <td>
+                          <button
+                            type="button"
+                            className="expand-button"
+                            aria-expanded={isOpen}
+                            aria-label={isOpen ? "Hide details" : "Show details"}
+                            onClick={() => toggle(key)}
+                          >
+                            {isOpen ? "\u25BE" : "\u25B8"}
+                          </button>
+                        </td>
+                        <td className="mono" title={entry.job_id}>
+                          <a href={`#/jobs/${entry.job_id}`}>{entry.job_id.slice(0, 8)}</a>
+                        </td>
+                        <td className="mono">{entry.job_type ?? "unknown"}</td>
+                        <td className="error-cell" title={entry.error_reason}>
+                          {entry.error_reason}
+                        </td>
+                        <td>{entry.attempt_count}</td>
+                        <td title={formatTimestamp(entry.failed_at)}>
+                          {timeAgo(entry.failed_at)}
+                        </td>
+                        <td>
+                          {earlier.has(key) ? (
+                            <span className="muted">Earlier failure</span>
+                          ) : (
+                            <CurrentStatusCell status={statuses?.get(entry.job_id)} />
+                          )}
+                        </td>
+                      </tr>
+                      {isOpen && (
+                        <tr className="row-details">
+                          <td colSpan={COLUMNS}>
+                            <EntryDetails entry={entry} />
+                          </td>
+                        </tr>
                       )}
-                    </td>
-                  </tr>
-                ))}
+                    </Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -136,5 +177,48 @@ function CurrentStatusCell({ status }: { status: CurrentStatus | undefined }) {
     <span className="replayed">
       <span className="muted">Replayed,</span> <StatusBadge status={status} />
     </span>
+  );
+}
+
+/**
+ * A message the worker could not decode at all.
+ *
+ * worker/main.py records these with zero attempts and the stream's raw fields
+ * in place of a payload, because there was no job to run. Its job ID is often
+ * generated, with no job row behind it, which is why such entries show the
+ * job row as gone.
+ */
+function isPoison(entry: DLQEntry): boolean {
+  return (
+    entry.attempt_count === 0 &&
+    entry.original_payload !== null &&
+    "raw_fields" in entry.original_payload
+  );
+}
+
+function EntryDetails({ entry }: { entry: DLQEntry }) {
+  return (
+    <div className="entry-details">
+      <div>
+        <h3 className="card-title">Error</h3>
+        <p className="error-text">{entry.error_reason}</p>
+        <p className="muted entry-meta">
+          {isPoison(entry)
+            ? `Discarded ${formatTimestamp(entry.failed_at)} without running, because the message could not be decoded.`
+            : `Failed ${formatTimestamp(entry.failed_at)} after ${entry.attempt_count} ${
+                entry.attempt_count === 1 ? "attempt" : "attempts"
+              }.`}{" "}
+          <a href={`#/jobs/${entry.job_id}`}>Open the job</a>
+        </p>
+      </div>
+      {entry.original_payload ? (
+        <JsonBlock
+          title={isPoison(entry) ? "Raw stream fields" : "Original payload"}
+          value={isPoison(entry) ? entry.original_payload.raw_fields : entry.original_payload}
+        />
+      ) : (
+        <p className="muted">No payload was recorded for this failure.</p>
+      )}
+    </div>
   );
 }
