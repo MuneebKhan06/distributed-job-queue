@@ -1,6 +1,7 @@
 import HealthIndicator from "./components/HealthIndicator";
 import Layout, { type NavItem } from "./components/Layout";
 import { useHashRoute } from "./hooks/useHashRoute";
+import DlqPage from "./pages/DlqPage";
 import JobDetailPage from "./pages/JobDetailPage";
 import JobsPage from "./pages/JobsPage";
 import Placeholder from "./pages/Placeholder";
@@ -41,6 +42,8 @@ export default function App() {
     page = <JobsPage params={params} />;
   } else if (active.path === "/submit") {
     page = <SubmitPage />;
+  } else if (active.path === "/dlq") {
+    page = <DlqPage />;
   } else {
     page = <Placeholder description={DESCRIPTIONS[active.path]} />;
   }

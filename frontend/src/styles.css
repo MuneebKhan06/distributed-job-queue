@@ -674,3 +674,14 @@ button:disabled {
 .field-hint {
   font-size: 12px;
 }
+
+/* Long errors are cut to one line in the table. The full text is in the
+   title for now and in the expanded row later. */
+.error-cell {
+  max-width: 420px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--bad);
+}
