@@ -3,6 +3,7 @@ import { Fragment, useCallback, useState } from "react";
 import { api } from "../api/client";
 import type { DLQEntry } from "../api/types";
 import { StatusBadge } from "../components/Badge";
+import BulkReplay from "../components/BulkReplay";
 import JsonBlock from "../components/JsonBlock";
 import Pager from "../components/Pager";
 import ReplayButton from "../components/ReplayButton";
@@ -12,7 +13,7 @@ import { formatTimestamp, timeAgo } from "../lib/time";
 
 const POLL_MS = 5000;
 const PAGE_SIZE = 25;
-const COLUMNS = 8;
+const COLUMNS = 9;
 
 // dlq_jobs has no unique job_id: a job that is replayed and dies again gets a
 // second row. The failure time tells two rows for one job apart.
@@ -22,6 +23,12 @@ export function entryKey(entry: DLQEntry): string {
 
 export default function DlqPage() {
   const [page, setPage] = useState(0);
+  const changePage = (next: number) => {
+    // A selection on one page is invisible from the next, and replaying jobs
+    // nobody can see is not a good default.
+    setSelected(new Set());
+    setPage(next);
+  };
   // Keyed by entryKey so an open row stays open across polls, and so opening
   // one failure of a job does not open its other failures too.
   const [open, setOpen] = useState<Set<string>>(new Set());
@@ -54,12 +61,45 @@ export default function DlqPage() {
   );
   const earlier = earlierFailures(entries ?? []);
 
+  // Bulk replay only takes jobs that are still dead, on their latest row. A
+  // job already replayed would run twice, and that deserves the single row
+  // dialog that says so, not a line in a batch.
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const eligible = new Set(
+    (entries ?? [])
+      .filter((entry) => !earlier.has(entryKey(entry)) && statuses?.get(entry.job_id) === "dead")
+      .map((entry) => entry.job_id),
+  );
+  // Selection is intersected with what is eligible right now rather than
+  // pruned in an effect, so a job replayed elsewhere drops out of the batch
+  // the moment its status changes.
+  const chosen = [...selected].filter((id) => eligible.has(id));
+  const allChosen = eligible.size > 0 && chosen.length === eligible.size;
+
+  const toggleSelected = (jobId: string) =>
+    setSelected((current) => {
+      const next = new Set(current);
+      if (!next.delete(jobId)) {
+        next.add(jobId);
+      }
+      return next;
+    });
+
   if (loading) {
     return <p className="muted">Loading the dead letter queue</p>;
   }
 
   return (
     <>
+      {entries && entries.length > 0 && (
+        <BulkReplay
+          jobIds={chosen}
+          onDone={() => {
+            setSelected(new Set());
+            refreshStatuses();
+          }}
+        />
+      )}
       <section className="card table-card">
         {error && <p className="error">Could not refresh: {error.message}</p>}
         {entries && entries.length === 0 ? (
@@ -71,6 +111,16 @@ export default function DlqPage() {
             <table className="table">
               <thead>
                 <tr>
+                  <th>
+                    <input
+                      type="checkbox"
+                      className="select-box"
+                      aria-label="Select every dead job on this page"
+                      checked={allChosen}
+                      disabled={eligible.size === 0}
+                      onChange={() => setSelected(allChosen ? new Set() : new Set(eligible))}
+                    />
+                  </th>
                   <th aria-label="Details" />
                   <th>Job</th>
                   <th>Type</th>
@@ -88,6 +138,18 @@ export default function DlqPage() {
                   return (
                     <Fragment key={key}>
                       <tr className={isOpen ? "row-open" : undefined}>
+                        <td>
+                          {!earlier.has(key) && (
+                            <input
+                              type="checkbox"
+                              className="select-box"
+                              aria-label={`Select ${entry.job_id}`}
+                              checked={chosen.includes(entry.job_id)}
+                              disabled={!eligible.has(entry.job_id)}
+                              onChange={() => toggleSelected(entry.job_id)}
+                            />
+                          )}
+                        </td>
                         <td>
                           <button
                             type="button"
@@ -150,7 +212,7 @@ export default function DlqPage() {
         pageSize={PAGE_SIZE}
         shown={entries?.length ?? 0}
         hasNext={hasNext}
-        onPage={setPage}
+        onPage={changePage}
       />
     </>
   );
