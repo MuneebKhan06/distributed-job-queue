@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 export interface NavItem {
   path: string;
   label: string;
+  badge?: string | null;
 }
 
 interface LayoutProps {
@@ -25,7 +26,12 @@ export default function Layout({ title, nav, activePath, status, children }: Lay
               href={`#${item.path}`}
               className={item.path === activePath ? "active" : undefined}
             >
-              {item.label}
+              <span>{item.label}</span>
+              {item.badge && (
+                <span className="nav-badge" aria-label={`${item.badge} dead jobs`}>
+                  {item.badge}
+                </span>
+              )}
             </a>
           ))}
         </nav>

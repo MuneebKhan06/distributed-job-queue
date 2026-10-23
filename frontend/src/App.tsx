@@ -1,5 +1,6 @@
 import HealthIndicator from "./components/HealthIndicator";
 import Layout, { type NavItem } from "./components/Layout";
+import { useDeadCount } from "./hooks/useDeadCount";
 import { useHashRoute } from "./hooks/useHashRoute";
 import DlqPage from "./pages/DlqPage";
 import JobDetailPage from "./pages/JobDetailPage";
@@ -25,6 +26,8 @@ const JOB_DETAIL = /^\/jobs\/([^/]+)$/;
 
 export default function App() {
   const { path, params } = useHashRoute();
+  const deadCount = useDeadCount();
+  const nav = NAV.map((item) => (item.path === "/dlq" ? { ...item, badge: deadCount } : item));
   const detailMatch = JOB_DETAIL.exec(path);
   const jobId = detailMatch ? decodeURIComponent(detailMatch[1]) : null;
 
@@ -49,7 +52,7 @@ export default function App() {
   }
 
   return (
-    <Layout title={title} nav={NAV} activePath={active.path} status={<HealthIndicator />}>
+    <Layout title={title} nav={nav} activePath={active.path} status={<HealthIndicator />}>
       {page}
     </Layout>
   );

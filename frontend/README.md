@@ -42,8 +42,8 @@ src/
 |-- api/
 |   |-- types.ts          # Mirrors app/schemas/jobs.py
 |   |-- client.ts         # fetch wrapper and one function per endpoint
-|-- components/           # Layout, health, badges, filters, pager
-|-- hooks/                # Hash routing, polling, debounce
+|-- components/           # Layout, badges, filters, pager, dialogs, replay
+|-- hooks/                # Hash routing, polling, debounce, job statuses
 |-- lib/                  # Time formatting, presets, submission checks
 |-- pages/                # One file per screen
 |-- styles.css            # Theme variables, light and dark

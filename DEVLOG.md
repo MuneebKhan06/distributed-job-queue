@@ -304,3 +304,36 @@ disk, and the badges, table and timeline that import it would have failed from
 a fresh clone. Found only because a new file in the same directory refused to
 stage. The frontend ignore file now re-includes `src/lib/`, and builds are
 checked from a clean clone of the commit rather than the working tree.
+
+---
+
+## Frontend Pass 5: Dead letter queue
+
+Listing, inspecting and replaying jobs that ran out of retries.
+
+- A DLQ row records a failure, not a job's present state. `replay_job` leaves
+  the row in place, and a job that dies again gets a second one, so the list
+  alone cannot tell a stuck job from one that completed an hour ago. Each row
+  now shows its job's current status, and older failures of a job that died
+  more than once are marked as earlier so only the latest carries a status
+  and a Replay button.
+- Replay resets the job to `queued` whatever state it is in, as long as a DLQ
+  row exists. Replaying a job that has since completed runs it again, and
+  replaying one that is queued or running puts a second copy on the stream.
+  The single row dialog says so in each case. Bulk replay sidesteps the
+  question by only accepting jobs that are still dead.
+- Bulk replays run one request at a time. Parallel requests would enqueue in
+  whatever order they landed, and a progress count would be a guess.
+- The sidebar badge counts jobs with status `dead`, not DLQ rows. Rows only
+  ever accumulate, and a number that never goes down stops being looked at.
+  It stops counting at 50 rather than fetching every dead job's payload.
+- Undecodable messages reach the DLQ from `worker/main.py` with zero attempts,
+  the raw stream fields standing in for a payload, and usually a generated job
+  ID with no job row behind it. They are shown as discarded rather than
+  failed, and cannot be replayed, since the API has nothing to enqueue from.
+
+**Gotcha:** the first version of the details panel claimed in a comment that a
+missing payload meant the worker could not decode the message. Reading
+`_discard` showed the opposite: it always writes a payload, just a different
+one. Checked before committing, but it was a reminder that the DLQ has two
+writers with different shapes.
