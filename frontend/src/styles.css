@@ -872,3 +872,16 @@ button:disabled {
   font-size: 12px;
   border-top: 1px solid var(--border);
 }
+
+.notice p {
+  margin: 0 0 8px;
+}
+
+.notice p:last-child {
+  margin-bottom: 0;
+}
+
+.stat-row + .stat-row,
+.warning + .stat-row {
+  margin-top: 12px;
+}

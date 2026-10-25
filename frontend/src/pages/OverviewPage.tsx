@@ -1,5 +1,6 @@
 import { api } from "../api/client";
 import StatTile from "../components/StatTile";
+import ThroughputTiles from "../components/ThroughputTiles";
 import { usePolling } from "../hooks/usePolling";
 import { formatCount } from "../lib/format";
 import { byLabel, parsePromText, single } from "../lib/promText";
@@ -73,6 +74,12 @@ export default function OverviewPage() {
             detail="Backing off before the next attempt"
           />
         </div>
+      </section>
+      <section aria-labelledby="rates-heading">
+        <h2 id="rates-heading" className="section-title">
+          Throughput and failures
+        </h2>
+        <ThroughputTiles />
       </section>
       <StreamTable data={data} />
     </div>
