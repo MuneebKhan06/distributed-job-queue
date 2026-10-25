@@ -23,8 +23,13 @@ The dashboard is served on http://localhost:5173. Requests to `/api/*` are
 proxied to the API, so the browser stays on one origin and the API needs no
 CORS configuration for local work.
 
-If the API is not on port 8000, copy `.env.example` to `.env.local` and set
-`VITE_API_TARGET`.
+Requests to `/prom/*` go to Prometheus on port 9090, which the compose stack
+also starts. The overview reads throughput and failure rates from there,
+because each worker serves its own counters and only Prometheus adds them up.
+Queue depth comes from the API and works without it.
+
+If the API is not on port 8000, or Prometheus not on 9090, copy `.env.example`
+to `.env.local` and set `VITE_API_TARGET` or `VITE_PROMETHEUS_TARGET`.
 
 ## Scripts
 
