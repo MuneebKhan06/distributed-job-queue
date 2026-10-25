@@ -885,3 +885,109 @@ button:disabled {
 .warning + .stat-row {
   margin-top: 12px;
 }
+
+/* The chart line has its own token. The interface accent is too light for
+   the dark band a data mark needs, so dark mode takes a deeper step. Both
+   values were checked against their surface for lightness and contrast. */
+:root {
+  --series: #2563eb;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --series: #4f8ff7;
+  }
+}
+
+.chart-frame {
+  position: relative;
+  min-height: 60px;
+}
+
+.chart-frame svg {
+  display: block;
+  width: 100%;
+  outline: none;
+}
+
+.chart-frame svg:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+
+.chart-grid {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.chart-tick {
+  fill: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-line {
+  fill: none;
+  stroke: var(--series);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.chart-area {
+  fill: var(--series);
+  fill-opacity: 0.1;
+}
+
+.chart-dot {
+  fill: var(--series);
+  stroke: var(--surface);
+  stroke-width: 2;
+}
+
+.chart-end-label {
+  fill: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.chart-crosshair {
+  stroke: var(--muted);
+  stroke-width: 1;
+}
+
+.chart-tooltip {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 128px;
+  padding: 6px 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 12%);
+  font-size: 12px;
+  pointer-events: none;
+}
+
+.chart-empty {
+  margin: 0;
+  padding: 20px 0;
+}
+
+.chart-table {
+  margin-top: 12px;
+  font-size: 13px;
+}
+
+.chart-table summary {
+  cursor: pointer;
+  color: var(--accent);
+}
+
+.chart-table .table {
+  margin-top: 8px;
+  max-width: 320px;
+}

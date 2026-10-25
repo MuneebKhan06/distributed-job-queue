@@ -1,5 +1,6 @@
 import { api } from "../api/client";
 import StatTile from "../components/StatTile";
+import ThroughputChart from "../components/ThroughputChart";
 import ThroughputTiles from "../components/ThroughputTiles";
 import { usePolling } from "../hooks/usePolling";
 import { formatCount } from "../lib/format";
@@ -81,6 +82,7 @@ export default function OverviewPage() {
         </h2>
         <ThroughputTiles />
       </section>
+      <ThroughputChart />
       <StreamTable data={data} />
     </div>
   );

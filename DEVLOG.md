@@ -337,3 +337,42 @@ missing payload meant the worker could not decode the message. Reading
 `_discard` showed the opposite: it always writes a payload, just a different
 one. Checked before committing, but it was a reminder that the DLQ has two
 writers with different shapes.
+
+---
+
+## Frontend Pass 6: Overview
+
+Queue depth, throughput, failure rates and a throughput chart, on the page the
+dashboard opens to.
+
+- The plan said "throughput and failure rates from `/metrics`", and that was
+  wrong. The API's `/metrics` only holds what the API process counted:
+  submissions and the queue gauges. Completions, failures, dead jobs and
+  durations are counted inside each worker and served on each worker's own
+  port. Only Prometheus adds them together, so the overview reads queue depth
+  from the API and everything else from Prometheus's query API, through a
+  second dev server proxy.
+- Fetching `/metrics` is itself a scrape, and `refresh_queue_depths` reads
+  Redis on every scrape, so the queue tiles are live rather than cached.
+- The DLQ stream has a consumer group but no reader, so its lag is every
+  failure ever recorded. It is kept out of the backlog total and shown for
+  retention only.
+- `sum()` over a counter no worker has incremented yet is an empty vector, not
+  zero. Treating empty as zero is right when the workers are being scraped and
+  wrong when they are not, so the tiles also query `up` for the worker job and
+  warn when Prometheus sees none.
+- The chart breaks its line wherever samples are missing instead of joining
+  across a period nobody measured. Every value the crosshair shows is also in
+  a table view, and arrow keys move the crosshair for keyboard users.
+- The chart line has its own colour token. The interface accent is too light
+  for a data mark in dark mode, and a slightly deeper blue passes the
+  lightness and contrast checks against the dark surface.
+
+**Gotcha:** the phone width check first showed the chart overflowing at
+390px, and the fix that followed changed nothing. Measuring the layout from
+inside the page showed why: headless Chrome will not make a window narrower
+than 500px, so the "390px" screenshots were a 500px page cropped. Loading the
+dashboard in a 390px iframe gave the real picture, which was a fitting chart
+with two colliding time labels. Also found on the way: the Vite proxy answers
+an unreachable target with an empty 500, not the 502 a comment had claimed,
+so the Prometheus client now treats any non JSON reply as unreachable.
