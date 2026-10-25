@@ -819,3 +819,56 @@ button:disabled {
   line-height: 18px;
   text-align: center;
 }
+
+.overview {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.section-title {
+  font-size: 14px;
+  margin: 0 0 12px;
+}
+
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.stat-tile {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.stat-value {
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1.2;
+  margin: 4px 0 2px;
+}
+
+.stat-detail {
+  font-size: 12px;
+}
+
+.numeric-table td:not(:first-child),
+.numeric-table th:not(:first-child) {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.table-note {
+  margin: 0;
+  padding: 10px 16px 14px;
+  font-size: 12px;
+  border-top: 1px solid var(--border);
+}

@@ -5,7 +5,7 @@ import { useHashRoute } from "./hooks/useHashRoute";
 import DlqPage from "./pages/DlqPage";
 import JobDetailPage from "./pages/JobDetailPage";
 import JobsPage from "./pages/JobsPage";
-import Placeholder from "./pages/Placeholder";
+import OverviewPage from "./pages/OverviewPage";
 import SubmitPage from "./pages/SubmitPage";
 
 const NAV: NavItem[] = [
@@ -14,13 +14,6 @@ const NAV: NavItem[] = [
   { path: "/submit", label: "Submit job" },
   { path: "/dlq", label: "Dead letter queue" },
 ];
-
-const DESCRIPTIONS: Record<string, string> = {
-  "/": "Queue depth, throughput and failure rates at a glance.",
-  "/jobs": "Every job with its status, priority and attempts.",
-  "/submit": "Send a transform, validate or compute job to the queue.",
-  "/dlq": "Jobs that ran out of retries, ready to inspect and replay.",
-};
 
 const JOB_DETAIL = /^\/jobs\/([^/]+)$/;
 
@@ -31,7 +24,8 @@ export default function App() {
   const detailMatch = JOB_DETAIL.exec(path);
   const jobId = detailMatch ? decodeURIComponent(detailMatch[1]) : null;
 
-  // A job's own page sits under Jobs in the sidebar.
+  // A job's own page sits under Jobs in the sidebar. An unknown path falls
+  // back to the overview.
   const navPath = jobId ? "/jobs" : path;
   const active = NAV.find((item) => item.path === navPath) ?? NAV[0];
   const title = jobId ? `Job ${jobId.slice(0, 8)}` : active.label;
@@ -48,7 +42,7 @@ export default function App() {
   } else if (active.path === "/dlq") {
     page = <DlqPage />;
   } else {
-    page = <Placeholder description={DESCRIPTIONS[active.path]} />;
+    page = <OverviewPage />;
   }
 
   return (

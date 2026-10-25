@@ -44,7 +44,7 @@ src/
 |   |-- client.ts         # fetch wrapper and one function per endpoint
 |-- components/           # Layout, badges, filters, pager, dialogs, replay
 |-- hooks/                # Hash routing, polling, debounce, job statuses
-|-- lib/                  # Time formatting, presets, submission checks
-|-- pages/                # One file per screen
+|-- lib/                  # Formatting, presets, submission checks, metrics parser
+|-- pages/                # Overview, jobs, job detail, submit, DLQ
 |-- styles.css            # Theme variables, light and dark
 ```
