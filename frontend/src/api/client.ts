@@ -63,6 +63,11 @@ function fieldErrorsFrom(detail: unknown): Record<string, string> {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await send(path, init);
+  return (await response.json()) as T;
+}
+
+async function send(path: string, init?: RequestInit): Promise<Response> {
   const response = await fetch(`${BASE_URL}${path}`, {
     ...init,
     headers: { "Content-Type": "application/json", ...init?.headers },
@@ -81,7 +86,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new ApiError(response.status, message, fieldErrors);
   }
 
-  return (await response.json()) as T;
+  return response;
 }
 
 function toQuery(filters: JobFilters): string {
@@ -97,6 +102,9 @@ function toQuery(filters: JobFilters): string {
 
 export const api = {
   health: () => request<Health>("/health"),
+
+  // Prometheus text, not JSON. Parsed by lib/promText.
+  metricsText: async () => (await send("/metrics")).text(),
 
   listJobs: (filters: JobFilters = {}) =>
     request<JobDetail[]>(`/jobs${toQuery(filters)}`),
