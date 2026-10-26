@@ -1,0 +1,27 @@
+# Build stage. Only package files first, so the dependency layer survives
+# source changes, the same reason the Python images install requirements
+# before copying the code.
+FROM node:22-alpine AS build
+
+WORKDIR /build
+
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+
+COPY frontend/ ./
+RUN npm run build
+
+# Serve stage. The built dashboard is static files, so the image that ships is
+# nginx and those files, with no Node runtime and no node_modules.
+FROM nginx:1.27-alpine
+
+# The official image renders /etc/nginx/templates/*.template with envsubst at
+# start, which is how the upstream addresses stay configurable.
+COPY docker/nginx.dashboard.conf.template /etc/nginx/templates/default.conf.template
+COPY --from=build /build/dist /usr/share/nginx/html
+
+ENV API_UPSTREAM=api:8000 \
+    PROMETHEUS_UPSTREAM=prometheus:9090 \
+    DNS_RESOLVER=127.0.0.11
+
+EXPOSE 80

@@ -1,0 +1,10 @@
+# Every image builds from the repository root. Without this the build context
+# uploads the virtualenv, the dashboard's node_modules and the git history on
+# every build, none of which any image copies.
+.git
+.venv
+**/__pycache__
+.pytest_cache
+.ruff_cache
+frontend/node_modules
+frontend/dist
