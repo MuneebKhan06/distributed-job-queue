@@ -89,6 +89,20 @@ services:
     depends_on:
       - api
 
+  dashboard:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.dashboard
+    # 8080 by default, overridable for a host where that port is taken.
+    ports:
+      - "${DASHBOARD_PORT:-8080}:80"
+    # Waits for the API, which it cannot do anything useful without. Not for
+    # Prometheus: nginx looks upstreams up per request, so the dashboard runs
+    # without it and the overview says the rates are unavailable.
+    depends_on:
+      api:
+        condition: service_healthy
+
 volumes:
   redis_data:
   postgres_data:
