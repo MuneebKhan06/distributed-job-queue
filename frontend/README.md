@@ -31,6 +31,14 @@ Queue depth comes from the API and works without it.
 If the API is not on port 8000, or Prometheus not on 9090, copy `.env.example`
 to `.env.local` and set `VITE_API_TARGET` or `VITE_PROMETHEUS_TARGET`.
 
+## In the compose stack
+
+`docker compose up` from the repository root builds this directory into an
+nginx image (`docker/Dockerfile.dashboard`) and serves it on
+http://localhost:8080. nginx proxies `/api` and `/prom` exactly as the dev
+server does, so the same build works in both places. Upstreams are resolved
+per request, so the dashboard starts even when Prometheus is not running.
+
 ## Scripts
 
 | Command                | What it does                                     |

@@ -19,6 +19,7 @@ in PostgreSQL. No Celery. No RQ. The internals are built by hand.
 - [Project Structure](#project-structure)
 - [Architecture & Design Decisions](#architecture--design-decisions)
 - [Getting Started](#getting-started)
+- [Dashboard](#dashboard)
 - [API Reference](#api-reference)
 - [Development](#development)
 - [Load Test Results](#load-test-results)
@@ -72,6 +73,7 @@ Dead Letter Queue (jobs.dlq stream + dlq_jobs table)
 | PostgreSQL | Source of truth for job state and full history |
 | Dead Letter Queue | Captures permanently failed jobs for inspection and replay |
 | Prometheus | Metrics: queue depth, worker throughput, failure rates |
+| Dashboard | React UI: submit, watch, inspect and replay jobs; queue and throughput overview |
 | Locust | Load testing: jobs/sec at 1, 4, 8 workers |
 
 ---
@@ -83,7 +85,7 @@ distributed-job-queue/
 |
 |-- .github/
 |   |-- workflows/
-|       |-- ci.yml                   # Lint, unit tests on 3.10 and 3.11, integration job
+|       |-- ci.yml                   # Lint, unit tests on 3.10 and 3.11, integration, dashboard build
 |
 |-- app/
 |   |-- __init__.py
@@ -166,10 +168,27 @@ distributed-job-queue/
 |-- docker/
 |   |-- Dockerfile.api              # FastAPI image
 |   |-- Dockerfile.worker           # Worker image
+|   |-- Dockerfile.dashboard        # Builds the dashboard, serves it with nginx
+|   |-- nginx.dashboard.conf.template  # Static files plus /api and /prom proxies
+|   |-- prometheus.yml              # Scrapes the API and every worker replica
 |
-|-- docker-compose.yml              # Full local stack
+|-- frontend/                       # React + TypeScript dashboard (see its README)
+|   |-- src/
+|   |   |-- api/                    # Typed API client, Prometheus client
+|   |   |-- components/
+|   |   |-- hooks/
+|   |   |-- lib/
+|   |   |-- pages/                  # Overview, jobs, job detail, submit, DLQ
+|   |-- package.json
+|   |-- vite.config.ts              # Dev server with /api and /prom proxies
+|
+|-- docs/
+|   |-- screenshots/                # Dashboard captures used below
+|
+|-- docker-compose.yml              # Full local stack, dashboard included
 |-- docker-compose.test.yml         # Infra-only for integration tests
 |-- .env.example
+|-- .dockerignore                   # Keeps .venv and node_modules out of build contexts
 |-- alembic.ini
 |-- pyproject.toml                  # Ruff config
 |-- pytest.ini
@@ -485,7 +504,8 @@ cp .env.example .env
 docker-compose up -d
 ```
 
-This starts: Redis, PostgreSQL, FastAPI API, 2 worker instances, Prometheus.
+This starts: Redis, PostgreSQL, FastAPI API, 2 worker instances, Prometheus,
+and the dashboard on http://localhost:8080 (set `DASHBOARD_PORT` to move it).
 Alembic migrations run automatically before the API starts.
 
 ### 4. Verify everything is running
@@ -536,6 +556,58 @@ pytest tests/ -v
 ```bash
 locust -f load_tests/locustfile.py --host=http://localhost:8000
 ```
+
+---
+
+## Dashboard
+
+A React and TypeScript dashboard for operating the queue, served by the
+compose stack on http://localhost:8080. It talks to the same REST API as any
+other client, through an nginx proxy that keeps the browser on one origin, and
+reads worker throughput from Prometheus, which is the only place the workers'
+counters are added together. The screenshots below were taken against the
+real compose stack with two workers.
+
+![Overview](docs/screenshots/overview.png)
+
+**Overview.** Jobs waiting, in flight and backing off, read live from Redis
+through the API's metrics, then completions and failed attempts per minute,
+dead letter arrivals and the 95th percentile run time from Prometheus, with a
+30 minute throughput chart. If Prometheus is down the queue figures still work
+and the page says why the rates are missing.
+
+![Jobs](docs/screenshots/jobs.png)
+
+**Jobs.** A live table filtered by status, priority and job type, paged fifty
+at a time, with the filters and page kept in the URL so a view can be shared.
+The worker column shows the consumer group spreading work across replicas.
+
+![Job detail](docs/screenshots/job-detail.png)
+
+**Job detail.** Status, attempts, the worker that ran it, a timeline from
+submission to finish, the result and the payload. Dead jobs show the final
+error first and can be replayed from here.
+
+![A dead job](docs/screenshots/job-dead.png)
+
+![Dead letter queue](docs/screenshots/dlq.png)
+
+**Dead letter queue.** Every failure with its current job status beside it,
+because a replay leaves the row in place. A job that died twice shows its
+earlier failure separately. Replay asks for confirmation and warns when the job
+has already been replayed, and still dead jobs can be replayed in bulk.
+
+![Submit](docs/screenshots/submit.png)
+
+**Submit.** One click examples for each handler, checks in the browser that
+match the API's schema, API rejections shown against the field they concern,
+and a list of jobs sent from the tab with their live status.
+
+Dark mode follows the system setting.
+
+![Overview in dark mode](docs/screenshots/overview-dark.png)
+
+For development with hot reload, see [frontend/README.md](frontend/README.md).
 
 ---
 

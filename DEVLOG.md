@@ -376,3 +376,45 @@ dashboard in a 390px iframe gave the real picture, which was a fitting chart
 with two colliding time labels. Also found on the way: the Vite proxy answers
 an unreachable target with an empty 500, not the 502 a comment had claimed,
 so the Prometheus client now treats any non JSON reply as unreachable.
+
+---
+
+## Frontend Pass 7: Shipping it
+
+A Docker image and compose service for the dashboard, a CI job, Prettier, and
+the first run against the real stack.
+
+- The image is two stages: Node builds, nginx serves. nginx proxies `/api`
+  and `/prom` so production keeps the single origin the dev server gives, and
+  the API still needs no CORS. Upstreams resolve per request through Docker's
+  DNS, because a `proxy_pass` host that fails to resolve at start stops nginx
+  from starting at all, which would make the dashboard depend on Prometheus.
+- A root `.dockerignore` was overdue. Every image builds from the repository
+  root, so each build was uploading `.venv`, `node_modules` and `.git`.
+- The CI job runs the format check, the type check, the build and an image
+  build. Nothing outside a laptop had compiled the dashboard before, which is
+  how `time.ts` sat uncommitted for two days.
+
+**The real stack run was worth more than the six days of checks before it.**
+Every earlier pass was verified with builds, type checks and a mock server.
+Running the compose stack, sending real jobs and replaying a real dead one
+turned up three defects that none of that could see:
+
+1. The timeline said "retries exhausted" for a job that failed permanently on
+   attempt 1 of 5. The mock never produced a dead job, and the wording was
+   written from the case that seemed typical. It now reads the reason prefix
+   `_record_dead` writes.
+2. Replay resets `attempt` but keeps `submitted_at`, so a job replayed after
+   five minutes dead showed "waited in queue 5 m 39 s". The job row cannot
+   tell queue time from time spent dead, so the timeline now says "after
+   submission" and claims nothing more.
+3. The dead letter table was wider than a laptop screen once real error
+   messages filled it, hiding the Replay buttons off to the side.
+
+**Known gap, backend side:** "Sent to the DLQ in the last hour" read 0 with
+three dead jobs. `jobs_dead_total{reason=...}` does not exist until its first
+increment, so its first scraped sample is already 1 and `increase()` sees no
+change. The same applies to the first completion and failure of each job type.
+The fix is in the worker, not the dashboard: create each expected label set at
+startup with `.labels(...)` so every series starts at zero. Left for a backend
+change rather than worked around in PromQL.
