@@ -99,3 +99,43 @@ jobs:
           POSTGRES_DB: jobqueue_test
           REDIS_HOST: localhost
         run: pytest tests/ -m integration -v
+
+  dashboard:
+    name: Dashboard format, type check and build
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # The version the dashboard image builds with.
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # ci, not install: it fails if package-lock.json and package.json
+      # disagree, rather than quietly resolving something new.
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check formatting
+        run: npm run format:check
+
+      # build runs tsc as well, but on its own the type check fails with a
+      # clearer message than a failed bundle does.
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      # Builds the image without pushing it, so a broken Dockerfile or nginx
+      # template fails here rather than on someone's docker compose up.
+      - name: Build the dashboard image
+        working-directory: .
+        run: docker build -f docker/Dockerfile.dashboard -t job-queue-dashboard:ci .
