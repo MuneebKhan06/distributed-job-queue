@@ -80,8 +80,8 @@ export default function ThroughputTiles() {
         {unreachable && (
           <p className="muted">
             Workers count their own jobs and only Prometheus adds them up. It starts with{" "}
-            <span className="mono">docker compose up</span> on port 9090. Queue depth above
-            comes from the API and does not need it.
+            <span className="mono">docker compose up</span> on port 9090. Queue depth above comes
+            from the API and does not need it.
           </p>
         )}
       </div>
@@ -98,8 +98,8 @@ export default function ThroughputTiles() {
       {error && <p className="error">Could not refresh: {error.message}</p>}
       {blind && (
         <p className="warning">
-          Prometheus is up but is not scraping any worker, so the rates below read zero
-          whatever the workers are doing.
+          Prometheus is up but is not scraping any worker, so the rates below read zero whatever the
+          workers are doing.
         </p>
       )}
       <div className="stat-row">

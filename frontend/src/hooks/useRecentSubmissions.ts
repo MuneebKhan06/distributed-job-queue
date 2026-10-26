@@ -36,10 +36,7 @@ export function useRecentSubmissions() {
 
   const add = useCallback((entry: RecentSubmission) => {
     setEntries((current) => {
-      const next = [entry, ...current.filter((item) => item.jobId !== entry.jobId)].slice(
-        0,
-        LIMIT,
-      );
+      const next = [entry, ...current.filter((item) => item.jobId !== entry.jobId)].slice(0, LIMIT);
       save(next);
       return next;
     });

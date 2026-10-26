@@ -16,7 +16,9 @@ export default function Pager({ page, pageSize, shown, hasNext, onPage }: PagerP
 
   return (
     <div className="pager">
-      <span className="muted">{shown > 0 ? `Showing ${first} to ${last}` : "Nothing on this page"}</span>
+      <span className="muted">
+        {shown > 0 ? `Showing ${first} to ${last}` : "Nothing on this page"}
+      </span>
       <div className="pager-buttons">
         <button type="button" disabled={page === 0} onClick={() => onPage(page - 1)}>
           Newer

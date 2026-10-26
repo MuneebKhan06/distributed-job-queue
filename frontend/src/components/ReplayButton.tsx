@@ -79,19 +79,19 @@ export default function ReplayButton({ jobId, status, onReplayed }: ReplayButton
         onCancel={() => setOpen(false)}
       >
         <p>
-          <span className="mono">{jobId}</span> goes back on its priority stream with its
-          attempt count reset to zero, so it gets its full retry budget again.
+          <span className="mono">{jobId}</span> goes back on its priority stream with its attempt
+          count reset to zero, so it gets its full retry budget again.
         </p>
         {status === "completed" && (
           <p className="warning">
-            This job was already replayed and has completed since. Replaying it now runs it a
-            second time.
+            This job was already replayed and has completed since. Replaying it now runs it a second
+            time.
           </p>
         )}
         {(status === "queued" || status === "running" || status === "failed") && (
           <p className="warning">
-            This job was already replayed and is {status} right now. Replaying again resets it
-            and puts a second copy on the stream.
+            This job was already replayed and is {status} right now. Replaying again resets it and
+            puts a second copy on the stream.
           </p>
         )}
       </ConfirmDialog>

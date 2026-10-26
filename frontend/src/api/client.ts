@@ -1,11 +1,4 @@
-import type {
-  DLQEntry,
-  Health,
-  JobAccepted,
-  JobDetail,
-  JobFilters,
-  JobSubmission,
-} from "./types";
+import type { DLQEntry, Health, JobAccepted, JobDetail, JobFilters, JobSubmission } from "./types";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api";
 
@@ -106,8 +99,7 @@ export const api = {
   // Prometheus text, not JSON. Parsed by lib/promText.
   metricsText: async () => (await send("/metrics")).text(),
 
-  listJobs: (filters: JobFilters = {}) =>
-    request<JobDetail[]>(`/jobs${toQuery(filters)}`),
+  listJobs: (filters: JobFilters = {}) => request<JobDetail[]>(`/jobs${toQuery(filters)}`),
 
   getJob: (jobId: string) => request<JobDetail>(`/jobs/${jobId}`),
 
@@ -117,8 +109,7 @@ export const api = {
       body: JSON.stringify(submission),
     }),
 
-  listDlq: (limit = 50, offset = 0) =>
-    request<DLQEntry[]>(`/dlq${toQuery({ limit, offset })}`),
+  listDlq: (limit = 50, offset = 0) => request<DLQEntry[]>(`/dlq${toQuery({ limit, offset })}`),
 
   replayDlq: (jobId: string) =>
     request<{ job_id: string; status: string }>(`/dlq/${jobId}/replay`, {

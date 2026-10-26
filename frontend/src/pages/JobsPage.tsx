@@ -125,10 +125,7 @@ export default function JobsPage({ params }: { params: URLSearchParams }) {
   return (
     <>
       <div className="toolbar">
-        <JobFilterBar
-          value={{ status, priority, jobType: typeDraft }}
-          onChange={changeFilters}
-        />
+        <JobFilterBar value={{ status, priority, jobType: typeDraft }} onChange={changeFilters} />
         <RefreshControl
           live={live}
           updatedAt={updatedAt}

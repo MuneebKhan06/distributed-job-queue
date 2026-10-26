@@ -45,11 +45,7 @@ export default function SubmitPage() {
     setServerErrors({});
   };
 
-  const edit = (
-    field: keyof FieldErrors,
-    setter: (value: string) => void,
-    value: string,
-  ) => {
+  const edit = (field: keyof FieldErrors, setter: (value: string) => void, value: string) => {
     setter(value);
     if (serverErrors[field]) {
       setServerErrors(({ [field]: _cleared, ...rest }) => rest);

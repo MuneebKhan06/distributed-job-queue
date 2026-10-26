@@ -91,9 +91,9 @@ export default function OverviewPage() {
 function StreamSplit({ values }: { values: Map<string, number> }) {
   return (
     <>
-      {WORK_STREAMS.map((stream) => `${STREAM_LABELS[stream]} ${formatCount(values.get(stream) ?? null)}`).join(
-        " · ",
-      )}
+      {WORK_STREAMS.map(
+        (stream) => `${STREAM_LABELS[stream]} ${formatCount(values.get(stream) ?? null)}`,
+      ).join(" · ")}
     </>
   );
 }
@@ -137,8 +137,8 @@ function StreamTable({ data }: { data: QueueSnapshot }) {
         </table>
       </div>
       <p className="muted table-note">
-        Retained counts every entry still held in the stream, delivered or not, so it shows
-        whether trimming keeps up rather than how much work is left.
+        Retained counts every entry still held in the stream, delivered or not, so it shows whether
+        trimming keeps up rather than how much work is left.
       </p>
     </section>
   );

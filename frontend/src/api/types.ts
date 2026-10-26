@@ -5,13 +5,7 @@ export type JobPriority = "high" | "normal" | "low";
 
 export type JobStatus = "queued" | "running" | "completed" | "failed" | "dead";
 
-export const JOB_STATUSES: JobStatus[] = [
-  "queued",
-  "running",
-  "completed",
-  "failed",
-  "dead",
-];
+export const JOB_STATUSES: JobStatus[] = ["queued", "running", "completed", "failed", "dead"];
 
 export const JOB_PRIORITIES: JobPriority[] = ["high", "normal", "low"];
 

@@ -22,10 +22,12 @@ export default function JobDetailPage({ jobId }: { jobId: string }) {
   // job from the DLQ screen, or from the CLI, sends it back to queued, and a
   // page that had stopped polling would go on showing it as dead.
   const [settled, setSettled] = useState(false);
-  const { data: job, error, loading, refresh } = usePolling(
-    fetchJob,
-    settled ? SETTLED_POLL_MS : ACTIVE_POLL_MS,
-  );
+  const {
+    data: job,
+    error,
+    loading,
+    refresh,
+  } = usePolling(fetchJob, settled ? SETTLED_POLL_MS : ACTIVE_POLL_MS);
   const isSettled = job ? SETTLED.includes(job.status) : false;
   useEffect(() => setSettled(isSettled), [isSettled]);
 
@@ -38,7 +40,9 @@ export default function JobDetailPage({ jobId }: { jobId: string }) {
   if (error instanceof ApiError && error.status === 404) {
     return (
       <section className="card">
-        <p>No job with ID <span className="mono">{jobId}</span>.</p>
+        <p>
+          No job with ID <span className="mono">{jobId}</span>.
+        </p>
         <a href="#/jobs">Back to all jobs</a>
       </section>
     );
@@ -100,9 +104,7 @@ export default function JobDetailPage({ jobId }: { jobId: string }) {
           replaced on the next one. Completing clears it. */}
       {job.error_message && (
         <section className="card error-card">
-          <h2 className="card-title">
-            {job.status === "dead" ? "Final error" : "Last error"}
-          </h2>
+          <h2 className="card-title">{job.status === "dead" ? "Final error" : "Last error"}</h2>
           <p className="error-text">{job.error_message}</p>
         </section>
       )}

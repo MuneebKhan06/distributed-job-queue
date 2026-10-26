@@ -24,9 +24,7 @@ interface Failure {
 export default function BulkReplay({ jobIds, onDone }: BulkReplayProps) {
   const [open, setOpen] = useState(false);
   const [progress, setProgress] = useState<number | null>(null);
-  const [summary, setSummary] = useState<{ replayed: number; failures: Failure[] } | null>(
-    null,
-  );
+  const [summary, setSummary] = useState<{ replayed: number; failures: Failure[] } | null>(null);
 
   const run = async () => {
     const failures: Failure[] = [];
@@ -85,8 +83,8 @@ export default function BulkReplay({ jobIds, onDone }: BulkReplayProps) {
         onCancel={() => setOpen(false)}
       >
         <p>
-          Each goes back on its priority stream with its attempt count reset to zero. Only jobs
-          that are still dead can be selected, so none of these will run twice.
+          Each goes back on its priority stream with its attempt count reset to zero. Only jobs that
+          are still dead can be selected, so none of these will run twice.
         </p>
         {busy && (
           <p className="muted">

@@ -44,10 +44,7 @@ export default function DlqPage() {
 
   // Same trick as the jobs table: one extra row says whether an older page
   // exists, since the endpoint returns no total.
-  const fetchEntries = useCallback(
-    () => api.listDlq(PAGE_SIZE + 1, page * PAGE_SIZE),
-    [page],
-  );
+  const fetchEntries = useCallback(() => api.listDlq(PAGE_SIZE + 1, page * PAGE_SIZE), [page]);
   const { data, error, loading } = usePolling(fetchEntries, POLL_MS);
   const entries = data ? data.slice(0, PAGE_SIZE) : null;
   const hasNext = data !== null && data.length > PAGE_SIZE;
@@ -169,9 +166,7 @@ export default function DlqPage() {
                           {entry.error_reason}
                         </td>
                         <td>{entry.attempt_count}</td>
-                        <td title={formatTimestamp(entry.failed_at)}>
-                          {timeAgo(entry.failed_at)}
-                        </td>
+                        <td title={formatTimestamp(entry.failed_at)}>{timeAgo(entry.failed_at)}</td>
                         <td>
                           {earlier.has(key) ? (
                             <span className="muted">Earlier failure</span>

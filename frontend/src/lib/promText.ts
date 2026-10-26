@@ -40,7 +40,10 @@ function parseLabels(body: string): Record<string, string> {
     if (eq === -1) {
       break;
     }
-    const key = body.slice(i, eq).replace(/^[\s,]+/, "").trim();
+    const key = body
+      .slice(i, eq)
+      .replace(/^[\s,]+/, "")
+      .trim();
     let j = eq + 1;
     if (body[j] !== '"') {
       break;
