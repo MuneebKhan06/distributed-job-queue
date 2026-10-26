@@ -12,11 +12,16 @@ interface Step {
 
 // The worker overwrites started_at on every attempt and only sets
 // completed_at once the job is finished for good, completed or dead. So on a
-// retried job the middle step is the latest attempt, and the wait before it
+// retried job the middle step is the latest attempt, and the gap before it
 // includes every earlier attempt and backoff, not just time on the stream.
+//
+// A replay muddies it further. It resets the attempt counter but keeps the
+// original submitted_at, so a job replayed after an hour dead looks like a
+// first attempt that queued for an hour. The job row cannot tell those apart,
+// so the gap is stated as what it is, time since submission, rather than
+// labelled as queue wait.
 function buildSteps(job: JobDetail): Step[] {
   const retried = job.attempt > 1;
-  const waitLabel = retried ? "Waited, including earlier attempts" : "Waited in queue";
   const steps: Step[] = [{ label: "Submitted", at: job.submitted_at, state: "done" }];
 
   steps.push({
@@ -24,7 +29,9 @@ function buildSteps(job: JobDetail): Step[] {
     at: job.started_at,
     state: job.started_at ? (job.status === "running" ? "current" : "done") : "pending",
     note: job.started_at
-      ? `${waitLabel} ${formatDuration(job.submitted_at, job.started_at)}`
+      ? `${formatDuration(job.submitted_at, job.started_at)} after submission${
+          retried ? ", including earlier attempts" : ""
+        }`
       : undefined,
   });
 
@@ -33,7 +40,7 @@ function buildSteps(job: JobDetail): Step[] {
       label: "Gave up",
       at: job.completed_at,
       state: "failed",
-      note: "Retries exhausted, moved to the dead letter queue",
+      note: deadReason(job),
     });
   } else if (job.status === "failed") {
     steps.push({
@@ -55,6 +62,17 @@ function buildSteps(job: JobDetail): Step[] {
   }
 
   return steps;
+}
+
+// _record_dead in worker/executor.py prefixes the error with one of these two
+// reasons. They need telling apart: a permanent failure stops on its first
+// attempt with retries left unused, and calling that "retries exhausted" sends
+// the reader looking for a flaky dependency when the payload is the problem.
+function deadReason(job: JobDetail): string {
+  if (job.error_message?.startsWith("permanent failure")) {
+    return `Failed permanently on attempt ${job.attempt}, moved to the dead letter queue`;
+  }
+  return "Retries exhausted, moved to the dead letter queue";
 }
 
 export default function JobTimeline({ job }: { job: JobDetail }) {

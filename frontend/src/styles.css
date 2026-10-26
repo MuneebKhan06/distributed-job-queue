@@ -596,6 +596,15 @@ button:disabled {
   font-weight: 600;
 }
 
+/* Faded accent with faded white text was unreadable. A disabled primary
+   button falls back to the plain button look, which still reads clearly. */
+.primary-button:disabled {
+  color: var(--muted);
+  background: var(--bg);
+  border-color: var(--border);
+  opacity: 1;
+}
+
 .success-card {
   border-color: var(--ok);
 }
@@ -683,7 +692,7 @@ button:disabled {
 /* Long errors are cut to one line in the table. The full text is in the
    title for now and in the expanded row later. */
 .error-cell {
-  max-width: 420px;
+  max-width: 280px;
   overflow: hidden;
   text-overflow: ellipsis;
   font-family: var(--mono);
@@ -995,4 +1004,12 @@ button:disabled {
 .chart-table .table {
   margin-top: 8px;
   max-width: 320px;
+}
+
+/* For tables with many narrow columns, such as the dead letter queue, which
+   otherwise needs more than a laptop's width. */
+.table-compact th,
+.table-compact td {
+  padding-left: 10px;
+  padding-right: 10px;
 }

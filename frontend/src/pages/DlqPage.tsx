@@ -13,7 +13,7 @@ import { formatTimestamp, timeAgo } from "../lib/time";
 
 const POLL_MS = 5000;
 const PAGE_SIZE = 25;
-const COLUMNS = 9;
+const COLUMNS = 8;
 
 // dlq_jobs has no unique job_id: a job that is replayed and dies again gets a
 // second row. The failure time tells two rows for one job apart.
@@ -105,7 +105,7 @@ export default function DlqPage() {
           </p>
         ) : (
           <div className="table-scroll">
-            <table className="table">
+            <table className="table table-compact">
               <thead>
                 <tr>
                   <th>
@@ -122,7 +122,6 @@ export default function DlqPage() {
                   <th>Job</th>
                   <th>Type</th>
                   <th>Error</th>
-                  <th>Attempts</th>
                   <th>Failed</th>
                   <th>Now</th>
                   <th aria-label="Actions" />
@@ -165,7 +164,6 @@ export default function DlqPage() {
                         <td className="error-cell" title={entry.error_reason}>
                           {entry.error_reason}
                         </td>
-                        <td>{entry.attempt_count}</td>
                         <td title={formatTimestamp(entry.failed_at)}>{timeAgo(entry.failed_at)}</td>
                         <td>
                           {earlier.has(key) ? (
