@@ -418,3 +418,43 @@ change. The same applies to the first completion and failure of each job type.
 The fix is in the worker, not the dashboard: create each expected label set at
 startup with `.labels(...)` so every series starts at zero. Left for a backend
 change rather than worked around in PromQL.
+
+---
+
+## Review pass: using it in a browser
+
+Every earlier check was a build, a type check, a screenshot or a curl. This
+pass clicked through each screen in a real browser against the compose stack,
+which is the first time anything was used the way a person would use it.
+
+- **Dialogs inside table rows did not wrap.** The replay confirmation is
+  rendered in the cell holding its button. The browser draws it in the top
+  layer, but it still inherits the cell's `white-space: nowrap`, so its text
+  ran off behind a horizontal scrollbar. A screenshot of the page could never
+  show this, because the dialog only exists once something is clicked.
+- **A successful submit looked like nothing happened.** The confirmation card
+  sat under the form, below the fold on a laptop. It now appears beside the
+  button, where a rejection already did.
+- **The dashboard had no tests.** Vitest now covers the metrics parser, the
+  submission checks, the time helpers and the DLQ arrival count, and CI runs
+  them before the build.
+- **Each tab now has its own title,** led by the dead job count when there is
+  one, instead of every tab and history entry reading "Job Queue Dashboard".
+
+**Correction to Pass 7.** The known gap there blamed `jobs_dead_total` series
+appearing only on their first increment, and proposed creating each label set
+at worker startup. That fix does not work: `job_type` is free text, so there
+is no fixed set of series to create, and creating one when a job type is first
+seen happens in the same instant as its first increment. Prometheus's own
+answer, created timestamp zero ingestion, needs protobuf scraping, which the
+Python client does not serve. The dashboard now counts dead letter arrivals
+from `dlq_jobs` through the API instead, a timestamped row per arrival, which
+is exact and works without Prometheus. Checked side by side: two fresh
+failures counted as 2 from the table and 0 from `increase()`. The same blind
+spot affects the first completion and failure of each job type in the rate
+tiles, which matters little for a rate over five minutes of steady traffic.
+
+**Gotcha:** after rebuilding the dashboard image, the already open tab kept
+showing the old behaviour. Navigating by hash never reloads the page, so it
+was still running the previous bundle. Not a bug in the dashboard, but worth
+remembering before concluding a fix did not work.

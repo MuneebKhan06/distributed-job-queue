@@ -1,3 +1,5 @@
+import { useEffect } from "react";
+
 import HealthIndicator from "./components/HealthIndicator";
 import Layout, { type NavItem } from "./components/Layout";
 import { useDeadCount } from "./hooks/useDeadCount";
@@ -29,6 +31,14 @@ export default function App() {
   const navPath = jobId ? "/jobs" : path;
   const active = NAV.find((item) => item.path === navPath) ?? NAV[0];
   const title = jobId ? `Job ${jobId.slice(0, 8)}` : active.label;
+
+  // Every page used to share one tab title, so several open tabs and the
+  // browser history all read "Job Queue Dashboard". The dead count leads when
+  // there is one, since a tab title is often all of the dashboard in view.
+  useEffect(() => {
+    const prefix = deadCount ? `(${deadCount} dead) ` : "";
+    document.title = `${prefix}${title} \u00b7 Job Queue`;
+  }, [title, deadCount]);
 
   let page;
   if (jobId) {

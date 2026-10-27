@@ -571,9 +571,9 @@ real compose stack with two workers.
 ![Overview](docs/screenshots/overview.png)
 
 **Overview.** Jobs waiting, in flight and backing off, read live from Redis
-through the API's metrics, then completions and failed attempts per minute,
-dead letter arrivals and the 95th percentile run time from Prometheus, with a
-30 minute throughput chart. If Prometheus is down the queue figures still work
+through the API's metrics, and dead letter arrivals in the last hour counted
+from the database. Then completions and failed attempts per minute and the
+95th percentile run time from Prometheus, with a 30 minute throughput chart. If Prometheus is down the queue figures still work
 and the page says why the rates are missing.
 
 ![Jobs](docs/screenshots/jobs.png)
