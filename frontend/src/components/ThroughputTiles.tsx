@@ -15,7 +15,6 @@ const WORKER_JOB = 'job="job-queue-workers"';
 const QUERIES = {
   completed: "sum(rate(jobs_completed_total[5m])) * 60",
   failed: "sum(rate(jobs_failed_total[5m])) * 60",
-  dead: "sum by (reason) (increase(jobs_dead_total[1h]))",
   p95: "histogram_quantile(0.95, sum by (le) (rate(job_duration_seconds_bucket[5m])))",
   workersUp: `sum(up{${WORKER_JOB}})`,
   workersKnown: `count(up{${WORKER_JOB}})`,
@@ -35,12 +34,9 @@ async function fetchRates() {
     ),
   );
   const result = Object.fromEntries(entries) as Record<keyof typeof QUERIES, InstantSample[]>;
-  const deadBy = new Map(result.dead.map((sample) => [sample.labels.reason, sample.value]));
   return {
     completed: scalar(result.completed),
     failed: scalar(result.failed),
-    deadPermanent: deadBy.get("permanent") ?? 0,
-    deadExhausted: deadBy.get("exhausted") ?? 0,
     // NaN when nothing ran in the window, since a quantile of no observations
     // is undefined. Kept as NaN so the tile can say so instead of showing 0 s.
     p95: result.p95.length ? result.p95[0].value : Number.NaN,
@@ -88,7 +84,6 @@ export default function ThroughputTiles() {
     );
   }
 
-  const deadTotal = data.deadPermanent + data.deadExhausted;
   // Without this, an empty result reads as "nothing happened" when the truth
   // may be that Prometheus cannot see a single worker.
   const blind = data.workersKnown === 0 || data.workersUp === 0;
@@ -112,13 +107,6 @@ export default function ThroughputTiles() {
           label="Failed attempts per minute"
           value={perMinute(data.failed)}
           detail="Each one is retried after a backoff"
-        />
-        <StatTile
-          label="Sent to the DLQ in the last hour"
-          value={formatCount(Math.round(deadTotal))}
-          detail={`${Math.round(data.deadPermanent)} permanent · ${Math.round(
-            data.deadExhausted,
-          )} out of retries`}
         />
         <StatTile
           label="95th percentile run time"

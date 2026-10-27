@@ -3,6 +3,7 @@ import StatTile from "../components/StatTile";
 import ThroughputChart from "../components/ThroughputChart";
 import ThroughputTiles from "../components/ThroughputTiles";
 import { usePolling } from "../hooks/usePolling";
+import { countArrivals } from "../lib/dlqArrivals";
 import { formatCount } from "../lib/format";
 import { byLabel, parsePromText, single } from "../lib/promText";
 
@@ -19,11 +20,17 @@ const STREAM_LABELS: Record<string, string> = {
   "jobs.dlq": "Dead letter",
 };
 
+const HOUR_MS = 60 * 60 * 1000;
+// Enough rows to count a bad hour exactly. Past this the tile says "100+".
+const ARRIVALS_LIMIT = 100;
+
 async function fetchQueue() {
   // Each request is a scrape, and refresh_queue_depths reads Redis on every
   // scrape, so these are live numbers rather than whatever was cached last.
-  const samples = parsePromText(await api.metricsText());
+  const [text, dlq] = await Promise.all([api.metricsText(), api.listDlq(ARRIVALS_LIMIT, 0)]);
+  const samples = parsePromText(text);
   return {
+    arrivals: countArrivals(dlq, Date.now() - HOUR_MS, ARRIVALS_LIMIT),
     lag: byLabel(samples, "queue_depth", "stream"),
     pending: byLabel(samples, "queue_pending", "stream"),
     length: byLabel(samples, "stream_length", "stream"),
@@ -56,7 +63,7 @@ export default function OverviewPage() {
       {error && <p className="error">Could not refresh: {error.message}</p>}
       <section aria-labelledby="queue-heading">
         <h2 id="queue-heading" className="section-title">
-          Queue right now
+          Queue
         </h2>
         <div className="stat-row">
           <StatTile
@@ -74,6 +81,11 @@ export default function OverviewPage() {
             value={formatCount(data.retry)}
             detail="Backing off before the next attempt"
           />
+          <StatTile
+            label="Sent to the DLQ in the last hour"
+            value={data.arrivals.capped ? `${ARRIVALS_LIMIT}+` : formatCount(data.arrivals.total)}
+            detail={<ArrivalSplit arrivals={data.arrivals} />}
+          />
         </div>
       </section>
       <section aria-labelledby="rates-heading">
@@ -86,6 +98,15 @@ export default function OverviewPage() {
       <StreamTable data={data} />
     </div>
   );
+}
+
+function ArrivalSplit({ arrivals }: { arrivals: ReturnType<typeof countArrivals> }) {
+  const parts = [`${arrivals.permanent} permanent`, `${arrivals.exhausted} out of retries`];
+  // Only mentioned when there are any, since they should be rare.
+  if (arrivals.undecodable > 0) {
+    parts.push(`${arrivals.undecodable} undecodable`);
+  }
+  return <>{parts.join(" \u00b7 ")}</>;
 }
 
 function StreamSplit({ values }: { values: Map<string, number> }) {
