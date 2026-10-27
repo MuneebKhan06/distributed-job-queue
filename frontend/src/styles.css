@@ -605,17 +605,12 @@ button:disabled {
   opacity: 1;
 }
 
-.success-card {
-  border-color: var(--ok);
-}
-
-.success-card .card-title {
-  color: var(--ok);
-}
-
-.success-card p {
+.form-success {
   margin: 0;
-  word-break: break-all;
+  padding: 8px 12px;
+  border-left: 3px solid var(--ok);
+  background: var(--bg);
+  word-break: break-word;
 }
 
 .field-error {

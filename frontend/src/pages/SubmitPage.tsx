@@ -209,8 +209,21 @@ export default function SubmitPage() {
           </p>
         ))}
 
+        {/* The outcome sits beside the button that caused it. Below the form
+            it landed under the fold on a laptop, so a successful submit
+            looked like nothing had happened. role="status" has screen
+            readers announce it too. */}
+        {accepted && (
+          <p className="form-success" role="status">
+            Queued{" "}
+            <a href={`#/jobs/${accepted.job_id}`} className="mono">
+              {accepted.job_id}
+            </a>{" "}
+            as stream message <span className="mono">{accepted.stream_message_id}</span>.
+          </p>
+        )}
         {error && (
-          <p className="error">
+          <p className="error" role="alert">
             {error.message}
             {error.existingJobId && (
               <>
@@ -231,18 +244,6 @@ export default function SubmitPage() {
           </button>
         </div>
       </form>
-
-      {accepted && (
-        <section className="card success-card">
-          <h2 className="card-title">Job queued</h2>
-          <p>
-            <a href={`#/jobs/${accepted.job_id}`} className="mono">
-              {accepted.job_id}
-            </a>{" "}
-            is on the stream as message <span className="mono">{accepted.stream_message_id}</span>.
-          </p>
-        </section>
-      )}
 
       <RecentSubmissions entries={recent.entries} onClear={recent.clear} />
     </div>
