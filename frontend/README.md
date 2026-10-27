@@ -41,14 +41,15 @@ per request, so the dashboard starts even when Prometheus is not running.
 
 ## Scripts
 
-| Command                | What it does                                     |
-| ---------------------- | ------------------------------------------------ |
-| `npm run dev`          | Dev server with hot reload and the API proxy     |
-| `npm run build`        | Type check, then produce static files in `dist/` |
-| `npm run preview`      | Serve the built files locally                    |
-| `npm run typecheck`    | Type check only                                  |
-| `npm run format`       | Rewrite every file in the house style            |
-| `npm run format:check` | Fail if any file is not formatted, as CI does    |
+| Command                | What it does                                                  |
+| ---------------------- | ------------------------------------------------------------- |
+| `npm run dev`          | Dev server with hot reload and the API proxy                  |
+| `npm run build`        | Type check, then produce static files in `dist/`              |
+| `npm run preview`      | Serve the built files locally                                 |
+| `npm run typecheck`    | Type check only                                               |
+| `npm test`             | Unit tests for the parser, submission checks and time helpers |
+| `npm run format`       | Rewrite every file in the house style                         |
+| `npm run format:check` | Fail if any file is not formatted, as CI does                 |
 
 ## Layout
 

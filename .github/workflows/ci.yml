@@ -101,7 +101,7 @@ jobs:
         run: pytest tests/ -m integration -v
 
   dashboard:
-    name: Dashboard format, type check and build
+    name: Dashboard format, type check, tests and build
     runs-on: ubuntu-latest
 
     defaults:
@@ -130,6 +130,9 @@ jobs:
       # clearer message than a failed bundle does.
       - name: Type check
         run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
 
       - name: Build
         run: npm run build
