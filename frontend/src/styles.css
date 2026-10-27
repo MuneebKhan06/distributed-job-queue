@@ -740,7 +740,14 @@ button:disabled {
   font-size: 13px;
 }
 
+/* A dialog opened from a table row is rendered inside that row's cell, so it
+   inherits the cell's text styles even though it is drawn in the top layer.
+   Table cells do not wrap, which left a dialog's paragraphs on one line with a
+   horizontal scrollbar. These undo what a cell would pass down. */
 .dialog {
+  white-space: normal;
+  text-align: left;
+  font-weight: 400;
   width: min(520px, calc(100vw - 32px));
   padding: 20px 22px;
   color: var(--text);
