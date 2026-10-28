@@ -1015,3 +1015,21 @@ button:disabled {
   padding-left: 10px;
   padding-right: 10px;
 }
+
+.missing-job {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 640px;
+}
+
+.missing-job p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.missing-job-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
