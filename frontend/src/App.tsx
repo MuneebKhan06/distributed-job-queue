@@ -7,6 +7,7 @@ import { useHashRoute } from "./hooks/useHashRoute";
 import DlqPage from "./pages/DlqPage";
 import JobDetailPage from "./pages/JobDetailPage";
 import JobsPage from "./pages/JobsPage";
+import NotFoundPage from "./pages/NotFoundPage";
 import OverviewPage from "./pages/OverviewPage";
 import SubmitPage from "./pages/SubmitPage";
 
@@ -26,11 +27,12 @@ export default function App() {
   const detailMatch = JOB_DETAIL.exec(path);
   const jobId = detailMatch ? decodeURIComponent(detailMatch[1]) : null;
 
-  // A job's own page sits under Jobs in the sidebar. An unknown path falls
-  // back to the overview.
+  // A job's own page sits under Jobs in the sidebar. An unknown path used to
+  // fall back to the overview under the Overview title, so a typo in a pasted
+  // link looked like a working page. It now says so and highlights nothing.
   const navPath = jobId ? "/jobs" : path;
-  const active = NAV.find((item) => item.path === navPath) ?? NAV[0];
-  const title = jobId ? `Job ${jobId.slice(0, 8)}` : active.label;
+  const active = NAV.find((item) => item.path === navPath) ?? null;
+  const title = jobId ? `Job ${jobId.slice(0, 8)}` : (active?.label ?? "Page not found");
 
   // Every page used to share one tab title, so several open tabs and the
   // browser history all read "Job Queue Dashboard". The dead count leads when
@@ -45,6 +47,8 @@ export default function App() {
     // Keyed so moving between two jobs starts clean instead of briefly
     // showing the first job's details under the second one's URL.
     page = <JobDetailPage key={jobId} jobId={jobId} />;
+  } else if (!active) {
+    page = <NotFoundPage path={path} />;
   } else if (active.path === "/jobs") {
     page = <JobsPage params={params} />;
   } else if (active.path === "/submit") {
@@ -56,7 +60,7 @@ export default function App() {
   }
 
   return (
-    <Layout title={title} nav={nav} activePath={active.path} status={<HealthIndicator />}>
+    <Layout title={title} nav={nav} activePath={active?.path ?? null} status={<HealthIndicator />}>
       {page}
     </Layout>
   );

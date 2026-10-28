@@ -18,7 +18,7 @@ const SETTLED: JobStatus[] = ["completed", "dead"];
 
 function MissingJob({ jobId, reason, onRetry }: MissingJobProps) {
   return (
-    <section className="card missing-job">
+    <section className="card notice-card">
       <p>
         {reason === "invalid" ? "Not a valid job ID: " : "No job with ID "}
         <span className="mono">{jobId}</span>
@@ -28,7 +28,7 @@ function MissingJob({ jobId, reason, onRetry }: MissingJobProps) {
           Job IDs are full UUIDs. The tables only show the first 8 characters.
         </p>
       )}
-      <div className="missing-job-actions">
+      <div className="notice-actions">
         <a href="#/jobs">Back to all jobs</a>
         {onRetry && (
           <button type="button" onClick={onRetry}>

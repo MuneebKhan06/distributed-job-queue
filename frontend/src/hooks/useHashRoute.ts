@@ -12,7 +12,9 @@ const REPLACED = "hashreplace";
 function currentRoute(): HashRoute {
   const hash = window.location.hash.replace(/^#/, "") || "/";
   const [path, query = ""] = hash.split("?", 2);
-  return { path: path || "/", params: new URLSearchParams(query) };
+  // "#/jobs/" is the same page as "#/jobs", not an unknown one.
+  const trimmed = path.length > 1 ? path.replace(/\/+$/, "") : path;
+  return { path: trimmed || "/", params: new URLSearchParams(query) };
 }
 
 function buildHash(path: string, params: Record<string, string | undefined>): string {

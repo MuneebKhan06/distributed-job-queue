@@ -1016,19 +1016,19 @@ button:disabled {
   padding-right: 10px;
 }
 
-.missing-job {
+.notice-card {
   display: flex;
   flex-direction: column;
   gap: 10px;
   max-width: 640px;
 }
 
-.missing-job p {
+.notice-card p {
   margin: 0;
   overflow-wrap: anywhere;
 }
 
-.missing-job-actions {
+.notice-actions {
   display: flex;
   align-items: center;
   gap: 16px;

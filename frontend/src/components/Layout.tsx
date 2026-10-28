@@ -9,7 +9,8 @@ export interface NavItem {
 interface LayoutProps {
   title: string;
   nav: NavItem[];
-  activePath: string;
+  // Null on a page that is not in the sidebar, such as the not found page.
+  activePath: string | null;
   status?: ReactNode;
   children: ReactNode;
 }
