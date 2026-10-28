@@ -6,6 +6,8 @@
  * are converted here once rather than at each call site.
  */
 
+import { fetchWithTimeout } from "../lib/fetchWithTimeout";
+
 const BASE_URL = import.meta.env.VITE_PROMETHEUS_BASE_URL ?? "/prom";
 
 export class PrometheusError extends Error {
@@ -39,8 +41,10 @@ interface PromResponse<T> {
 async function get<T>(path: string, params: Record<string, string>): Promise<T> {
   let response: Response;
   try {
-    response = await fetch(`${BASE_URL}${path}?${new URLSearchParams(params)}`);
+    response = await fetchWithTimeout(`${BASE_URL}${path}?${new URLSearchParams(params)}`);
   } catch {
+    // A timeout lands here too. A Prometheus that cannot answer in time is
+    // as good as unreachable for a screen that refreshes every few seconds.
     throw new PrometheusError("Prometheus is not reachable", true);
   }
 

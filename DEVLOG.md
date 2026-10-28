@@ -458,3 +458,28 @@ tiles, which matters little for a rate over five minutes of steady traffic.
 showing the old behaviour. Navigating by hash never reloads the page, so it
 was still running the previous bundle. Not a bug in the dashboard, but worth
 remembering before concluding a fix did not work.
+
+## Hardening pass: when things go wrong
+
+The review pass used the dashboard with everything working. This one broke
+things on purpose, against the same compose stack, to see what the screens
+do about it.
+
+- **A job that does not exist was polled forever.** A 404 on the job page
+  repeated every two seconds while the tab stayed open. Polling now stops,
+  with a Check again button. A short or mistyped ID used to print FastAPI's
+  UUID validation error; it is now caught before any request is sent.
+- **An unknown address showed the overview.** A typo like `#/jbos` looked
+  like a working page. It now gets a page that says the address leads
+  nowhere, and `#/jobs/` with a trailing slash means the jobs list.
+- **One page throwing blanked the whole app.** Pages now render inside an
+  error boundary within the layout, so the sidebar survives. Tested by making
+  the jobs list return `[{}]` from the browser console.
+- **A hung API looked healthy.** With the API container paused, requests
+  never settled and the health dots stayed green on their last answer. Every
+  request now gives up after 10 seconds. That alone was not enough:
+  `usePolling` drops an answer once a newer call has started, and a new call
+  started every 5 seconds, so a 10 second timeout was always outranked and
+  never shown. Polling now skips a tick while the last call is still waiting.
+  With the container paused, "API unreachable" appeared within about 20
+  seconds and cleared by itself after unpausing.

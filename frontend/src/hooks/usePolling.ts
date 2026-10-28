@@ -22,6 +22,11 @@ export interface PollingState<T> {
  * since, otherwise a slow reply for the old filter could land after the new
  * one and overwrite it.
  *
+ * A tick is skipped while the previous call is still waiting. Otherwise a
+ * server slower than the interval collects a pile of overlapping requests,
+ * and since each newer call outranks the one before, a call that finally
+ * times out is always outranked and its error never reaches the screen.
+ *
  * With enabled false the interval stops, but a new fetcher still fetches once,
  * so changing a filter on a paused screen still shows the matching rows.
  */
@@ -35,9 +40,11 @@ export function usePolling<T>(
   const [loading, setLoading] = useState(true);
   const [updatedAt, setUpdatedAt] = useState<number | null>(null);
   const latestCall = useRef(0);
+  const waiting = useRef(false);
 
   const run = useCallback(async () => {
     const call = ++latestCall.current;
+    waiting.current = true;
     try {
       const result = await fetcher();
       if (call === latestCall.current) {
@@ -52,6 +59,7 @@ export function usePolling<T>(
     } finally {
       if (call === latestCall.current) {
         setLoading(false);
+        waiting.current = false;
       }
     }
   }, [fetcher]);
@@ -65,7 +73,7 @@ export function usePolling<T>(
       return;
     }
     const timer = window.setInterval(() => {
-      if (document.visibilityState === "visible") {
+      if (document.visibilityState === "visible" && !waiting.current) {
         void run();
       }
     }, intervalMs);

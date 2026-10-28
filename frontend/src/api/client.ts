@@ -1,3 +1,4 @@
+import { TimeoutError, fetchWithTimeout } from "../lib/fetchWithTimeout";
 import type { DLQEntry, Health, JobAccepted, JobDetail, JobFilters, JobSubmission } from "./types";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api";
@@ -61,10 +62,18 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 async function send(path: string, init?: RequestInit): Promise<Response> {
-  const response = await fetch(`${BASE_URL}${path}`, {
-    ...init,
-    headers: { "Content-Type": "application/json", ...init?.headers },
-  });
+  let response: Response;
+  try {
+    response = await fetchWithTimeout(`${BASE_URL}${path}`, {
+      ...init,
+      headers: { "Content-Type": "application/json", ...init?.headers },
+    });
+  } catch (caught) {
+    if (caught instanceof TimeoutError) {
+      throw new Error(`The API is not answering. ${caught.message}.`);
+    }
+    throw caught;
+  }
 
   if (!response.ok) {
     let message = `${response.status} ${response.statusText}`;
