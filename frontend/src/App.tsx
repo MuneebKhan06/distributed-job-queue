@@ -2,6 +2,7 @@ import { useEffect } from "react";
 
 import HealthIndicator from "./components/HealthIndicator";
 import Layout, { type NavItem } from "./components/Layout";
+import PageErrorBoundary from "./components/PageErrorBoundary";
 import { useDeadCount } from "./hooks/useDeadCount";
 import { useHashRoute } from "./hooks/useHashRoute";
 import DlqPage from "./pages/DlqPage";
@@ -61,7 +62,7 @@ export default function App() {
 
   return (
     <Layout title={title} nav={nav} activePath={active?.path ?? null} status={<HealthIndicator />}>
-      {page}
+      <PageErrorBoundary key={path}>{page}</PageErrorBoundary>
     </Layout>
   );
 }
