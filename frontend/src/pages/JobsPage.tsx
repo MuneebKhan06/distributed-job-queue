@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 
 import { api } from "../api/client";
 import {
@@ -137,7 +137,18 @@ export default function JobsPage({ params }: { params: URLSearchParams }) {
         <p className="muted">Loading jobs</p>
       ) : (
         <>
-          <JobsTable jobs={jobs} error={error} />
+          <JobsTable
+            jobs={jobs}
+            error={error}
+            empty={
+              <EmptyJobs
+                page={page}
+                jobType={jobType}
+                filtered={Boolean(status || priority || jobType)}
+                onFirstPage={() => changePage(0)}
+              />
+            }
+          />
           <Pager
             page={page}
             pageSize={PAGE_SIZE}
@@ -151,12 +162,60 @@ export default function JobsPage({ params }: { params: URLSearchParams }) {
   );
 }
 
-function JobsTable({ jobs, error }: { jobs: JobDetail[] | null; error: Error | null }) {
+interface EmptyJobsProps {
+  page: number;
+  jobType: string;
+  filtered: boolean;
+  onFirstPage: () => void;
+}
+
+// One message used to cover every empty table, and it advised loosening
+// filters that were not set, or blamed the filters for a page number past
+// the end, which is what an old bookmark leads to.
+function EmptyJobs({ page, jobType, filtered, onFirstPage }: EmptyJobsProps) {
+  if (page > 0) {
+    return (
+      <p className="muted empty">
+        This page is past the last job.{" "}
+        <button type="button" className="link-button" onClick={onFirstPage}>
+          Go to the newest jobs
+        </button>
+      </p>
+    );
+  }
+  if (filtered) {
+    return (
+      <p className="muted empty">
+        No jobs match these filters.
+        {jobType && (
+          <>
+            {" "}
+            The job type has to match exactly, so <span className="mono">{jobType}</span> does not
+            find <span className="mono">{jobType}.something</span>.
+          </>
+        )}
+      </p>
+    );
+  }
+  return (
+    <p className="muted empty">
+      No jobs yet. <a href="#/submit">Submit one</a> and it shows up here.
+    </p>
+  );
+}
+
+interface JobsTableProps {
+  jobs: JobDetail[] | null;
+  error: Error | null;
+  empty: ReactNode;
+}
+
+function JobsTable({ jobs, error, empty }: JobsTableProps) {
   return (
     <section className="card table-card">
       {error && <p className="error">Could not refresh: {error.message}</p>}
       {jobs && jobs.length === 0 ? (
-        <p className="muted empty">No jobs match. Submit one, or loosen the filters.</p>
+        empty
       ) : (
         <div className="table-scroll">
           <table className="table">

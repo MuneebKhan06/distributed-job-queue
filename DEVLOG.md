@@ -483,3 +483,25 @@ do about it.
   never shown. Polling now skips a tick while the last call is still waiting.
   With the container paused, "API unreachable" appeared within about 20
   seconds and cleared by itself after unpausing.
+
+## Follow up: what a timeout leaves behind
+
+Giving every request a ten second limit raised a new question: a request
+that timed out may still have been carried out. That matters for the two
+screens that write.
+
+- **Submitting twice.** With the job ID box empty, the API picked a fresh ID
+  each time, so resubmitting after a timeout could queue the job twice. The
+  browser now picks the ID and keeps it for the same draft, so a resubmit is
+  the same job and comes back as a 409, explained as the earlier attempt
+  having gone through. Checked by pausing the API, submitting, unpausing:
+  the held request was stored, the resubmit got the 409, one job in the table.
+- **Replaying twice.** A replay that got no answer was shown as failed, which
+  invites a second one. It now says the outcome is unknown and refreshes the
+  status first. Bulk replay stops at the first unanswered request instead of
+  waiting ten seconds per job. In the test the held replay did happen once
+  the API was unpaused, which is the case the wording is for.
+- **Empty tables.** The jobs list had one empty message for every case,
+  advising to loosen filters that were not set. It now tells apart a page
+  past the end, filters that match nothing (with a note that job type is an
+  exact match), and an empty queue.
