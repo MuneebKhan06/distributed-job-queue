@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { api } from "../api/client";
+import { NoAnswerError, api } from "../api/client";
 import ConfirmDialog from "./ConfirmDialog";
 
 interface BulkReplayProps {
@@ -11,6 +11,15 @@ interface BulkReplayProps {
 interface Failure {
   jobId: string;
   message: string;
+}
+
+interface Summary {
+  replayed: number;
+  failures: Failure[];
+  // Set when the API stopped answering: the job whose replay got no answer,
+  // and how many after it were never tried.
+  stoppedAt?: string;
+  skipped: number;
 }
 
 /**
@@ -24,17 +33,26 @@ interface Failure {
 export default function BulkReplay({ jobIds, onDone }: BulkReplayProps) {
   const [open, setOpen] = useState(false);
   const [progress, setProgress] = useState<number | null>(null);
-  const [summary, setSummary] = useState<{ replayed: number; failures: Failure[] } | null>(null);
+  const [summary, setSummary] = useState<Summary | null>(null);
 
   const run = async () => {
     const failures: Failure[] = [];
     let replayed = 0;
+    let stoppedAt: string | undefined;
     setProgress(0);
     for (const [index, jobId] of jobIds.entries()) {
       try {
         await api.replayDlq(jobId);
         replayed += 1;
       } catch (caught) {
+        // No answer is different from a refusal. The API is down or stuck,
+        // so carrying on would only wait out the timeout once per job, and
+        // the replay that got no answer may have happened.
+        if (caught instanceof NoAnswerError) {
+          stoppedAt = jobId;
+          setProgress(index + 1);
+          break;
+        }
         // One refusal does not stop the rest. Each replay stands alone, and
         // halting halfway would leave a selection that is neither done nor not.
         failures.push({
@@ -46,7 +64,8 @@ export default function BulkReplay({ jobIds, onDone }: BulkReplayProps) {
     }
     setProgress(null);
     setOpen(false);
-    setSummary({ replayed, failures });
+    const skipped = stoppedAt ? jobIds.length - jobIds.indexOf(stoppedAt) - 1 : 0;
+    setSummary({ replayed, failures, stoppedAt, skipped });
     onDone();
   };
 
@@ -66,12 +85,18 @@ export default function BulkReplay({ jobIds, onDone }: BulkReplayProps) {
         {jobIds.length === 0 ? "Select dead jobs to replay" : `Replay ${jobIds.length} selected`}
       </button>
       {summary && (
-        <span className={summary.failures.length ? "field-error" : "replay-ok"}>
+        <span
+          className={summary.failures.length || summary.stoppedAt ? "field-error" : "replay-ok"}
+        >
           {summary.replayed} replayed
           {summary.failures.length > 0 &&
             `, ${summary.failures.length} refused: ${summary.failures
               .map((failure) => `${failure.jobId.slice(0, 8)} (${failure.message})`)
               .join(", ")}`}
+          {summary.stoppedAt &&
+            `. Stopped because the API stopped answering: ${summary.stoppedAt.slice(0, 8)} may or may not have been replayed${
+              summary.skipped ? `, and ${summary.skipped} more were not tried` : ""
+            }. Check the Now column before trying again.`}
         </span>
       )}
       <ConfirmDialog

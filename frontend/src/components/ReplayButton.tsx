@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { api } from "../api/client";
+import { NoAnswerError, api } from "../api/client";
 import type { CurrentStatus } from "../hooks/useJobStatuses";
 import ConfirmDialog from "./ConfirmDialog";
 
@@ -41,10 +41,21 @@ export default function ReplayButton({ jobId, status, onReplayed }: ReplayButton
       setOutcome({ ok: true, message: "Queued again" });
       onReplayed?.();
     } catch (caught) {
-      setOutcome({
-        ok: false,
-        message: caught instanceof Error ? caught.message : String(caught),
-      });
+      if (caught instanceof NoAnswerError) {
+        // Replay is not idempotent, so "failed" would invite a second one
+        // that queues the job twice. The status is refreshed instead, and the
+        // dialog warns if the job turns out to be back on the stream.
+        setOutcome({
+          ok: false,
+          message: "No answer from the API. It may have gone through, so check its status first.",
+        });
+        onReplayed?.();
+      } else {
+        setOutcome({
+          ok: false,
+          message: caught instanceof Error ? caught.message : String(caught),
+        });
+      }
     } finally {
       setBusy(false);
       setOpen(false);
