@@ -17,6 +17,24 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * The request got no answer at all: it timed out, or the connection failed.
+ *
+ * Unlike an ApiError this says nothing about what the server did. A POST that
+ * timed out may well have been carried out, so callers that write treat it as
+ * an unknown outcome rather than a refusal.
+ */
+export class NoAnswerError extends Error {
+  constructor(
+    message: string,
+    // True for a timeout, where the request certainly reached the server.
+    readonly timedOut: boolean,
+  ) {
+    super(message);
+    this.name = "NoAnswerError";
+  }
+}
+
 interface ValidationIssue {
   loc?: unknown[];
   msg?: string;
@@ -70,9 +88,10 @@ async function send(path: string, init?: RequestInit): Promise<Response> {
     });
   } catch (caught) {
     if (caught instanceof TimeoutError) {
-      throw new Error(`The API is not answering. ${caught.message}.`);
+      throw new NoAnswerError(`The API is not answering. ${caught.message}.`, true);
     }
-    throw caught;
+    // fetch rejects with a TypeError when the connection itself fails.
+    throw new NoAnswerError("Could not reach the API.", false);
   }
 
   if (!response.ok) {

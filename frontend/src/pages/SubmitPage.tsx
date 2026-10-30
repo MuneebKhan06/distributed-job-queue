@@ -1,9 +1,10 @@
 import { type FormEvent, type KeyboardEvent, useState } from "react";
 
-import { ApiError, api } from "../api/client";
+import { ApiError, NoAnswerError, api } from "../api/client";
 import { JOB_PRIORITIES, type JobAccepted, type JobPriority } from "../api/types";
 import RecentSubmissions from "../components/RecentSubmissions";
 import { useRecentSubmissions } from "../hooks/useRecentSubmissions";
+import { newJobId } from "../lib/newJobId";
 import { formatPayload, JOB_PRESETS } from "../lib/presets";
 import { checkDraft, type FieldErrors, WIRE_FIELDS } from "../lib/validateSubmission";
 
@@ -31,6 +32,12 @@ export default function SubmitPage() {
   // Errors stay hidden until the first submit, so the form does not open by
   // scolding someone who has not finished typing.
   const [attempted, setAttempted] = useState(false);
+  // With the ID box empty the API used to pick the ID, so resubmitting after
+  // a timeout sent a brand new job, and if the first attempt had in fact got
+  // through, the job ran twice. The browser now picks it and keeps it until
+  // the draft changes or the job is accepted. A resubmit of the same draft is
+  // then the same job, and the API answers a repeat with a 409.
+  const [draftId, setDraftId] = useState<string | null>(null);
   const recent = useRecentSubmissions();
 
   const check = checkDraft({ jobId, jobType, maxAttempts, payloadText });
@@ -41,12 +48,14 @@ export default function SubmitPage() {
     const preset = JOB_PRESETS[index];
     setJobType(preset.jobType);
     setPayloadText(formatPayload(preset.payload));
+    setDraftId(null);
     setError(null);
     setServerErrors({});
   };
 
   const edit = (field: keyof FieldErrors, setter: (value: string) => void, value: string) => {
     setter(value);
+    setDraftId(null);
     if (serverErrors[field]) {
       setServerErrors(({ [field]: _cleared, ...rest }) => rest);
     }
@@ -77,25 +86,43 @@ export default function SubmitPage() {
       return;
     }
 
+    const ownId = jobId.trim();
+    const sentId = ownId || draftId || newJobId();
+    const isRetry = !ownId && sentId === draftId;
+    if (!ownId) {
+      setDraftId(sentId);
+    }
+
     setSubmitting(true);
     try {
       const result = await api.submitJob({
-        job_id: jobId.trim() || undefined,
+        job_id: sentId,
         job_type: jobType.trim(),
         priority,
         max_attempts: Number(maxAttempts),
         payload,
       });
       setAccepted(result);
+      setDraftId(null);
       recent.add({
         jobId: result.job_id,
         jobType: jobType.trim(),
         submittedAt: new Date().toISOString(),
       });
     } catch (caught) {
+      if (isRetry && caught instanceof ApiError && caught.status === 409) {
+        // The lost attempt was accepted after all, so it belongs in the list
+        // of jobs sent from this tab, and this draft has done its job.
+        recent.add({
+          jobId: sentId,
+          jobType: jobType.trim(),
+          submittedAt: new Date().toISOString(),
+        });
+        setDraftId(null);
+      }
       const fieldErrors = caught instanceof ApiError ? toFormErrors(caught.fieldErrors) : {};
       setServerErrors(fieldErrors);
-      setError(describeRejection(caught, jobId.trim(), Object.keys(fieldErrors).length > 0));
+      setError(describeRejection(caught, sentId, isRetry, Object.keys(fieldErrors).length > 0));
     } finally {
       setSubmitting(false);
     }
@@ -146,7 +173,10 @@ export default function SubmitPage() {
             Priority
             <select
               value={priority}
-              onChange={(event) => setPriority(event.target.value as JobPriority)}
+              onChange={(event) => {
+                setPriority(event.target.value as JobPriority);
+                setDraftId(null);
+              }}
             >
               {JOB_PRIORITIES.map((value) => (
                 <option key={value} value={value}>
@@ -261,13 +291,25 @@ function toFormErrors(wireErrors: Record<string, string>): FieldErrors {
   return errors;
 }
 
-function describeRejection(caught: unknown, jobId: string, onFields: boolean): Rejection {
+function describeRejection(
+  caught: unknown,
+  jobId: string,
+  isRetry: boolean,
+  onFields: boolean,
+): Rejection {
   if (caught instanceof ApiError && caught.status === 409) {
     // The ID is the idempotency key. A 409 means this exact job was already
     // accepted, so resending it is safe and nothing was queued twice.
     return {
-      message: "A job with this ID was already submitted, so nothing new was queued.",
-      existingJobId: jobId || undefined,
+      message: isRetry
+        ? "The earlier attempt did go through, so nothing new was queued."
+        : "A job with this ID was already submitted, so nothing new was queued.",
+      existingJobId: jobId,
+    };
+  }
+  if (caught instanceof NoAnswerError) {
+    return {
+      message: `${caught.message} The job may or may not have been queued. Submitting again is safe: it reuses the same job ID, so it cannot be queued twice.`,
     };
   }
   if (caught instanceof ApiError && caught.status === 422 && onFields) {
