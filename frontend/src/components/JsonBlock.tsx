@@ -6,10 +6,17 @@ interface JsonBlockProps {
 }
 
 const COPIED_MS = 1500;
+// A big result rendered in full made the job page slow to draw and buried
+// the timeline under it. Past this many lines only the start is shown.
+const PREVIEW_LINES = 60;
 
 export default function JsonBlock({ title, value }: JsonBlockProps) {
   const [copied, setCopied] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const text = JSON.stringify(value, null, 2);
+  const lines = text.split("\n");
+  const long = lines.length > PREVIEW_LINES;
+  const shown = long && !expanded ? lines.slice(0, PREVIEW_LINES).join("\n") : text;
 
   // The clipboard API is only there on secure origins. localhost counts, but
   // a dashboard opened over plain HTTP on a LAN address does not, so the
@@ -36,7 +43,15 @@ export default function JsonBlock({ title, value }: JsonBlockProps) {
           </button>
         )}
       </div>
-      <pre className="json">{text}</pre>
+      <pre className="json">{shown}</pre>
+      {/* Copy always takes the whole value, collapsed or not. */}
+      {long && (
+        <button type="button" className="link-button" onClick={() => setExpanded(!expanded)}>
+          {expanded
+            ? "Show less"
+            : `Show all ${lines.length} lines (${lines.length - PREVIEW_LINES} more)`}
+        </button>
+      )}
     </section>
   );
 }
