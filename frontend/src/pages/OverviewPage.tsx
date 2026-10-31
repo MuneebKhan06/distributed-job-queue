@@ -27,10 +27,8 @@ const ARRIVALS_LIMIT = 100;
 async function fetchQueue() {
   // Each request is a scrape, and refresh_queue_depths reads Redis on every
   // scrape, so these are live numbers rather than whatever was cached last.
-  const [text, dlq] = await Promise.all([api.metricsText(), api.listDlq(ARRIVALS_LIMIT, 0)]);
-  const samples = parsePromText(text);
+  const samples = parsePromText(await api.metricsText());
   return {
-    arrivals: countArrivals(dlq, Date.now() - HOUR_MS, ARRIVALS_LIMIT),
     lag: byLabel(samples, "queue_depth", "stream"),
     pending: byLabel(samples, "queue_pending", "stream"),
     length: byLabel(samples, "stream_length", "stream"),
@@ -38,7 +36,16 @@ async function fetchQueue() {
   };
 }
 
+// Polled on its own. It used to share a Promise.all with the metrics scrape,
+// so a failed DLQ read, a much heavier query, blanked every queue tile even
+// though the numbers they show had arrived fine.
+async function fetchArrivals() {
+  const dlq = await api.listDlq(ARRIVALS_LIMIT, 0);
+  return countArrivals(dlq, Date.now() - HOUR_MS, ARRIVALS_LIMIT);
+}
+
 type QueueSnapshot = Awaited<ReturnType<typeof fetchQueue>>;
+type Arrivals = Awaited<ReturnType<typeof fetchArrivals>>;
 
 function total(values: Map<string, number>, streams: string[]): number | null {
   const present = streams.filter((stream) => values.has(stream));
@@ -50,6 +57,7 @@ function total(values: Map<string, number>, streams: string[]): number | null {
 
 export default function OverviewPage() {
   const { data, error, loading } = usePolling(fetchQueue, POLL_MS);
+  const { data: arrivals, error: arrivalsError } = usePolling(fetchArrivals, POLL_MS);
 
   if (loading) {
     return <p className="muted">Loading queue metrics</p>;
@@ -83,8 +91,16 @@ export default function OverviewPage() {
           />
           <StatTile
             label="Sent to the DLQ in the last hour"
-            value={data.arrivals.capped ? `${ARRIVALS_LIMIT}+` : formatCount(data.arrivals.total)}
-            detail={<ArrivalSplit arrivals={data.arrivals} />}
+            value={arrivalsValue(arrivals)}
+            detail={
+              arrivals ? (
+                <ArrivalSplit arrivals={arrivals} />
+              ) : arrivalsError ? (
+                `Could not read the DLQ: ${arrivalsError.message}`
+              ) : (
+                "Counting"
+              )
+            }
           />
         </div>
       </section>
@@ -100,7 +116,14 @@ export default function OverviewPage() {
   );
 }
 
-function ArrivalSplit({ arrivals }: { arrivals: ReturnType<typeof countArrivals> }) {
+function arrivalsValue(arrivals: Arrivals | null): string {
+  if (!arrivals) {
+    return formatCount(null);
+  }
+  return arrivals.capped ? `${ARRIVALS_LIMIT}+` : formatCount(arrivals.total);
+}
+
+function ArrivalSplit({ arrivals }: { arrivals: Arrivals }) {
   const parts = [`${arrivals.permanent} permanent`, `${arrivals.exhausted} out of retries`];
   // Only mentioned when there are any, since they should be rare.
   if (arrivals.undecodable > 0) {
