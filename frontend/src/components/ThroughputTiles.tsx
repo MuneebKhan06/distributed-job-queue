@@ -37,8 +37,10 @@ async function fetchRates() {
   return {
     completed: scalar(result.completed),
     failed: scalar(result.failed),
-    // NaN when nothing ran in the window, since a quantile of no observations
-    // is undefined. Kept as NaN so the tile can say so instead of showing 0 s.
+    // NaN when nothing completed in the window, since a quantile of no
+    // observations is undefined. Kept as NaN so the tile can say so instead
+    // of showing 0 s. worker/executor.py only times a handler that returned,
+    // so failed attempts never reach this histogram.
     p95: result.p95.length ? result.p95[0].value : Number.NaN,
     workersUp: scalar(result.workersUp),
     workersKnown: scalar(result.workersKnown),
@@ -51,7 +53,7 @@ function perMinute(value: number): string {
 
 function formatSeconds(value: number): string {
   if (Number.isNaN(value)) {
-    return "None ran";
+    return "None completed";
   }
   return value < 1 ? `${Math.round(value * 1000)} ms` : `${value.toFixed(2)} s`;
 }
@@ -111,7 +113,7 @@ export default function ThroughputTiles() {
         <StatTile
           label="95th percentile run time"
           value={formatSeconds(data.p95)}
-          detail={`${data.workersUp} of ${data.workersKnown} workers reporting`}
+          detail={`Completed jobs only \u00b7 ${data.workersUp} of ${data.workersKnown} workers reporting`}
         />
       </div>
     </>
