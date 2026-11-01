@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ApiError, api } from "../api/client";
 import type { JobStatus } from "../api/types";
 import { PriorityBadge, StatusBadge } from "../components/Badge";
+import CopyButton from "../components/CopyButton";
 import JobTimeline from "../components/JobTimeline";
 import JsonBlock from "../components/JsonBlock";
 import ReplayButton from "../components/ReplayButton";
@@ -97,6 +98,9 @@ function JobDetail({ jobId }: { jobId: string }) {
       <section className="card">
         <div className="detail-heading">
           <span className="mono">{job.job_id}</span>
+          {/* The full ID is what the CLI, the logs and a bug report need, and
+              selecting a UUID by hand tends to stop at a hyphen. */}
+          <CopyButton text={job.job_id} label="Copy job ID" />
           <StatusBadge status={job.status} />
           {/* Only offered while dead. The DLQ screen is where a job that has
               already been replayed can be replayed again, with the warning
