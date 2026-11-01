@@ -8,6 +8,16 @@ describe("formatDuration", () => {
     expect(formatDuration("2026-01-01T00:00:00Z", "2026-01-01T00:00:04.25Z")).toBe("4.3 s");
     expect(formatDuration("2026-01-01T00:00:00Z", "2026-01-01T00:05:39Z")).toBe("5 m 39 s");
   });
+
+  it("never shows sixty seconds", () => {
+    expect(formatDuration("2026-01-01T00:00:00Z", "2026-01-01T00:01:59.6Z")).toBe("2 m 0 s");
+    expect(formatDuration("2026-01-01T00:00:00Z", "2026-01-01T00:00:59.97Z")).toBe("1 m 0 s");
+  });
+
+  it("switches to hours and days for long gaps, as on a replayed job", () => {
+    expect(formatDuration("2026-01-01T00:00:00Z", "2026-01-01T02:30:10Z")).toBe("2 h 30 m");
+    expect(formatDuration("2026-01-01T00:00:00Z", "2026-01-04T05:00:00Z")).toBe("3 d 5 h");
+  });
 });
 
 describe("timeAgo", () => {

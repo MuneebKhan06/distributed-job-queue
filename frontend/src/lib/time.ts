@@ -28,9 +28,22 @@ export function formatDuration(fromIso: string, toIso: string): string {
   if (ms < 1000) {
     return `${ms} ms`;
   }
-  const seconds = ms / 1000;
-  if (seconds < 60) {
-    return `${seconds.toFixed(1)} s`;
+  if (ms < 59_950) {
+    return `${(ms / 1000).toFixed(1)} s`;
   }
-  return `${Math.floor(seconds / 60)} m ${Math.round(seconds % 60)} s`;
+  // Rounded to whole seconds before splitting, so 119.6 s reads 2 m 0 s
+  // rather than 1 m 60 s. A replayed job keeps its first submission time, so
+  // gaps of hours or days are normal on its timeline and get their own unit.
+  const total = Math.round(ms / 1000);
+  const days = Math.floor(total / 86_400);
+  const hours = Math.floor((total % 86_400) / 3_600);
+  const minutes = Math.floor((total % 3_600) / 60);
+  const seconds = total % 60;
+  if (days > 0) {
+    return `${days} d ${hours} h`;
+  }
+  if (hours > 0) {
+    return `${hours} h ${minutes} m`;
+  }
+  return `${minutes} m ${seconds} s`;
 }
