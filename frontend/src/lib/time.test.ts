@@ -31,4 +31,17 @@ describe("timeAgo", () => {
   it("reads timestamps with an explicit UTC offset, as the API sends them", () => {
     expect(timeAgo("2026-01-01T11:59:29.680175Z", now)).toMatch(/30 seconds ago/);
   });
+
+  it("reads a timestamp slightly ahead of the browser's clock as now", () => {
+    expect(timeAgo("2026-01-01T12:00:02Z", now)).toBe(timeAgo("2026-01-01T12:00:00Z", now));
+    expect(timeAgo("2026-01-01T12:00:02Z", now)).not.toMatch(/^in /);
+  });
+
+  it("still shows a timestamp far in the future as one", () => {
+    expect(timeAgo("2026-01-01T15:00:00Z", now)).toMatch(/3 hours/);
+  });
+
+  it("does not throw on a timestamp it cannot read", () => {
+    expect(timeAgo("not a date", now)).toBe("unknown time");
+  });
 });

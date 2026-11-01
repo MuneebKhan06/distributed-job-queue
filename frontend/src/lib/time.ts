@@ -8,8 +8,21 @@ const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
 const relative = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
 
 /** "3 minutes ago", with the exact timestamp left for a title attribute. */
+// How far ahead of the browser a timestamp may be and still count as now.
+// Server and browser clocks rarely agree to the second, and with the server
+// ahead, a job submitted a moment ago used to read "in 2 seconds".
+const SKEW_SECONDS = 300;
+
 export function timeAgo(iso: string, now: number = Date.now()): string {
-  const seconds = Math.round((new Date(iso).getTime() - now) / 1000);
+  const time = new Date(iso).getTime();
+  if (Number.isNaN(time)) {
+    // RelativeTimeFormat throws on NaN, which would take the page down.
+    return "unknown time";
+  }
+  let seconds = Math.round((time - now) / 1000);
+  if (seconds > 0 && seconds <= SKEW_SECONDS) {
+    seconds = 0;
+  }
   for (const [unit, size] of UNITS) {
     if (Math.abs(seconds) >= size || unit === "second") {
       return relative.format(Math.round(seconds / size), unit);
