@@ -18,6 +18,7 @@ FROM nginx:1.27-alpine
 # The official image renders /etc/nginx/templates/*.template with envsubst at
 # start, which is how the upstream addresses stay configurable.
 COPY docker/nginx.dashboard.conf.template /etc/nginx/templates/default.conf.template
+COPY docker/nginx.security-headers.conf /etc/nginx/snippets/security-headers.conf
 COPY --from=build /build/dist /usr/share/nginx/html
 
 ENV API_UPSTREAM=api:8000 \
