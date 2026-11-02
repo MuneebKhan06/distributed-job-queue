@@ -105,6 +105,12 @@ a {
   background: var(--surface);
 }
 
+/* Focused by script on every page change, for screen readers. It is not
+   something to act on, so it gets no focus ring. */
+.topbar h1:focus {
+  outline: none;
+}
+
 .topbar h1 {
   font-size: 18px;
   margin: 0;

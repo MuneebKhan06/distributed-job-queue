@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect, useRef } from "react";
 
 export interface NavItem {
   path: string;
@@ -16,6 +16,21 @@ interface LayoutProps {
 }
 
 export default function Layout({ title, nav, activePath, status, children }: LayoutProps) {
+  // Hash navigation never reloads the page, so after a click in the sidebar
+  // focus stayed on the link and a screen reader announced nothing: the new
+  // page arrived silently. Focus moves to the heading instead, which reads
+  // out the page's name, and Tab carries on from the top of its content.
+  // Skipped on first load, where taking focus would only get in the way.
+  const heading = useRef<HTMLHeadingElement>(null);
+  const firstRender = useRef(true);
+  useEffect(() => {
+    if (firstRender.current) {
+      firstRender.current = false;
+      return;
+    }
+    heading.current?.focus();
+  }, [title]);
+
   return (
     <div className="shell">
       <aside className="sidebar">
@@ -39,7 +54,9 @@ export default function Layout({ title, nav, activePath, status, children }: Lay
       </aside>
       <div className="main">
         <header className="topbar">
-          <h1>{title}</h1>
+          <h1 ref={heading} tabIndex={-1}>
+            {title}
+          </h1>
           {status}
         </header>
         <main className="content">{children}</main>
