@@ -53,7 +53,9 @@ function perMinute(value: number): string {
 
 function formatSeconds(value: number): string {
   if (Number.isNaN(value)) {
-    return "None completed";
+    // Short enough to fit the tile's large type on one line. The detail
+    // underneath says what it means.
+    return "None";
   }
   return value < 1 ? `${Math.round(value * 1000)} ms` : `${value.toFixed(2)} s`;
 }
@@ -113,7 +115,9 @@ export default function ThroughputTiles() {
         <StatTile
           label="95th percentile run time"
           value={formatSeconds(data.p95)}
-          detail={`Completed jobs only \u00b7 ${data.workersUp} of ${data.workersKnown} workers reporting`}
+          detail={`${
+            Number.isNaN(data.p95) ? "No jobs completed in five minutes" : "Completed jobs only"
+          } \u00b7 ${data.workersUp} of ${data.workersKnown} workers reporting`}
         />
       </div>
     </>

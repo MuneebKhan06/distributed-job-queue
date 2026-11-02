@@ -1,4 +1,5 @@
 import { KNOWN_JOB_TYPE_PREFIXES, type Payload } from "../api/types";
+import { isJobId } from "./jobId";
 
 export interface SubmissionDraft {
   jobId: string;
@@ -24,8 +25,6 @@ export const WIRE_FIELDS: Record<string, keyof SubmissionDraft> = {
   payload: "payloadText",
 };
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 // The API does not look inside the payload, so a missing field is only found
 // when a worker raises PermanentJobError and the job goes straight to the DLQ.
 // Mirrors the require() call at the top of each handler's run().
@@ -45,7 +44,7 @@ export function checkDraft(draft: SubmissionDraft): DraftCheck {
   const warnings: string[] = [];
 
   const jobId = draft.jobId.trim();
-  if (jobId && !UUID.test(jobId)) {
+  if (jobId && !isJobId(jobId)) {
     errors.jobId = "Must be a UUID, or left empty to generate one.";
   }
 

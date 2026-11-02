@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { isJobId } from "./jobId";
+import { newJobId } from "./newJobId";
 import { formatPayload, JOB_PRESETS } from "./presets";
 import { checkDraft } from "./validateSubmission";
 
@@ -19,6 +21,14 @@ describe("checkDraft", () => {
       );
       expect(check.errors, preset.jobType).toEqual({});
       expect(check.warnings, preset.jobType).toEqual([]);
+    }
+  });
+
+  it("accepts exactly the job IDs the job page will open", () => {
+    const samples = [newJobId(), newJobId().toUpperCase(), "3f2b8c1e", " not-a-uuid ", "x"];
+    for (const jobId of samples) {
+      const formAccepts = !checkDraft(draft({ jobId })).errors.jobId;
+      expect(formAccepts, jobId).toBe(isJobId(jobId.trim()));
     }
   });
 
