@@ -8,6 +8,17 @@ server {
 
     root /usr/share/nginx/html;
 
+    # The bundle is plain text and shrinks to about a third. Off by default in
+    # the stock image. Proxied API and Prometheus replies are compressed too,
+    # which matters for the DLQ list and the chart's range queries on a slow
+    # link. text/html is always included by nginx and must not be listed.
+    gzip on;
+    gzip_proxied any;
+    gzip_min_length 1024;
+    gzip_types text/css application/javascript application/json text/plain image/svg+xml;
+    gzip_vary on;
+
+
     # Docker's embedded DNS. Upstreams are looked up per request through
     # variables, rather than once at start. A fixed proxy_pass host that does
     # not resolve stops nginx from starting at all, which would tie the
