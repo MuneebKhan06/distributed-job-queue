@@ -14,7 +14,9 @@ export interface PollingState<T> {
  * The previous data is kept when a poll fails, so one dropped request shows an
  * error beside stale numbers instead of blanking the screen. Polling pauses
  * while the tab is hidden, since nobody is looking and the API has better
- * things to do.
+ * things to do. Coming back to the tab fetches at once rather than at the next
+ * tick, which on a settled job page could be fifteen seconds of stale data
+ * shown as if it were current.
  *
  * A new fetcher identity starts over immediately, which is how a filter change
  * reaches the API without waiting for the next tick. Callers memoise it. Each
@@ -77,7 +79,16 @@ export function usePolling<T>(
         void run();
       }
     }, intervalMs);
-    return () => window.clearInterval(timer);
+    const onVisible = () => {
+      if (document.visibilityState === "visible" && !waiting.current) {
+        void run();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [run, intervalMs, enabled]);
 
   return { data, error, loading, updatedAt, refresh: run };
